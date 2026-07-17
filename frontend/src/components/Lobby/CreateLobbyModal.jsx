@@ -3,12 +3,13 @@ import { useState } from "react";
 export default function CreateLobbyModal({ onCrear, onClose }) {
   const [nombre, setNombre] = useState("");
   const [modo, setModo] = useState("1v1");
+  const [tienePassword, setTienePassword] = useState(false);
   const [password, setPassword] = useState("");
   const [verCartasCompanero, setVerCartasCompanero] = useState(false);
 
   function submit(e) {
     e.preventDefault();
-    onCrear({ nombre, modo, password: password || null, verCartasCompanero });
+    onCrear({ nombre, modo, password: tienePassword ? password : null, verCartasCompanero });
   }
 
   return (
@@ -25,7 +26,13 @@ export default function CreateLobbyModal({ onCrear, onClose }) {
               <option value="3v3">3 vs 3</option>
             </select>
           </label>
-          <input placeholder="Contraseña (opcional)" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <input type="checkbox" checked={tienePassword} onChange={(e) => setTienePassword(e.target.checked)} />
+            Proteger con contraseña
+          </label>
+          {tienePassword && (
+            <input placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} />
+          )}
           {modo !== "1v1" && (
             <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <input type="checkbox" checked={verCartasCompanero} onChange={(e) => setVerCartasCompanero(e.target.checked)} />

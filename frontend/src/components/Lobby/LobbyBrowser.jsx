@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { socket } from "../../lib/socket";
 import CreateLobbyModal from "./CreateLobbyModal";
 
-export default function LobbyBrowser({ nombreJugador, onEntrarLobby }) {
+export default function LobbyBrowser({ nombreJugador, onEntrarLobby, onEspectar }) {
   const [lobbies, setLobbies] = useState([]);
   const [mostrarCrear, setMostrarCrear] = useState(false);
   const [error, setError] = useState("");
@@ -20,9 +20,9 @@ export default function LobbyBrowser({ nombreJugador, onEntrarLobby }) {
     });
   }
 
-  function unirse(lobbyId) {
-    const password = prompt("Contraseña de la mesa (si tiene):") || "";
-    socket.emit("lobby:unirse", { lobbyId, nombre: nombreJugador, password }, (res) => {
+  function unirse(l) {
+    const password = l.tienePassword ? (prompt("Esta mesa tiene contraseña:") || "") : "";
+    socket.emit("lobby:unirse", { lobbyId: l.id, nombre: nombreJugador, password }, (res) => {
       if (res.ok) onEntrarLobby(res.lobby);
       else setError(res.error);
     });
@@ -39,7 +39,9 @@ export default function LobbyBrowser({ nombreJugador, onEntrarLobby }) {
       {lobbies.map((l) => (
         <div key={l.id} style={{ display: "flex", justifyContent: "space-between", padding: "0.5rem 0", borderBottom: "1px solid var(--madera-3)" }}>
           <span>{l.nombre} — {l.modo} — {l.jugadores}/{l.capacidad} {l.tienePassword ? "🔒" : ""}</span>
-          <button className="btn btn-secundario" onClick={() => unirse(l.id)}>Unirse</button>
+          {l.jugadores < l.capacidad
+            ? <button className="btn btn-secundario" onClick={() => unirse(l)}>Unirse</button>
+            : <button className="btn btn-secundario" onClick={() => onEspectar(l.id)}>👁 Espectar</button>}
         </div>
       ))}
       {mostrarCrear && <CreateLobbyModal onCrear={crear} onClose={() => setMostrarCrear(false)} />}

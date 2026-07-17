@@ -15,6 +15,9 @@ function emitirEstado(io, lobby) {
   for (const j of lobby.jugadores) {
     emitirA(io, j.id, "estado", lobby.engine.estadoPublico(j.id));
   }
+  for (const e of lobby.espectadores) {
+    emitirA(io, e.id, "estado", lobby.engine.estadoPublico(e.id, true));
+  }
   const ganador = lobby.engine.finDePartida();
   if (ganador) {
     io.to(lobby.id).emit("fin-partida", { ganador, puntos: lobby.engine.puntos });
@@ -49,6 +52,22 @@ export function registrarHandlers(io, socket) {
 
   socket.on("lobby:listar", (cb) => cb(lobbyManager.listarPublicos()));
 
+  // Info de una mesa puntual por su ID (para entrar directo por urutrick.vercel.app/{id})
+  socket.on("lobby:info", (lobbyId, cb) => {
+    const lobby = lobbyManager.get(lobbyId);
+    if (!lobby) return cb?.({ ok: false, error: "Mesa no encontrada" });
+    cb?.({
+      ok: true,
+      id: lobby.id,
+      nombre: lobby.nombre,
+      modo: lobby.modo,
+      jugadores: lobby.jugadores.length,
+      iniciado: lobby.iniciado,
+      tienePassword: !!lobby.password,
+      soyJugador: lobby.jugadores.some((j) => j.id === userId),
+    });
+  });
+
   socket.on("lobby:crear", (data, cb) => {
     try {
       const lobby = lobbyManager.crear({ ...data, creador: { id: userId, nombre: data.nombre_jugador } });
@@ -68,14 +87,27 @@ export function registrarHandlers(io, socket) {
     } catch (e) { cb({ ok: false, error: e.message }); }
   });
 
+  // Espectar: no ocupa asiento, ve todas las cartas de todos los jugadores.
+  socket.on("lobby:espectar", ({ lobbyId, nombre }, cb) => {
+    try {
+      const lobby = lobbyManager.espectar(lobbyId, { id: userId, nombre: nombre || "Espectador" });
+      socket.join(lobbyId);
+      cb?.({ ok: true, lobby, iniciado: lobby.iniciado });
+      if (lobby.iniciado) emitirA(io, userId, "estado", lobby.engine.estadoPublico(userId, true));
+    } catch (e) { cb?.({ ok: false, error: e.message }); }
+  });
+
   // Reconexión tras refresh: el cliente guarda lobbyId en localStorage y reintenta esto al reconectar
   socket.on("lobby:reconectar", ({ lobbyId }, cb) => {
     try {
       const lobby = lobbyManager.get(lobbyId);
-      if (!lobby || !lobby.jugadores.some((j) => j.id === userId)) return cb?.({ ok: false });
+      if (!lobby) return cb?.({ ok: false });
+      const esJugador = lobby.jugadores.some((j) => j.id === userId);
+      const esEspectador = lobby.espectadores.some((e) => e.id === userId);
+      if (!esJugador && !esEspectador) return cb?.({ ok: false });
       socket.join(lobbyId);
-      cb?.({ ok: true, lobby, iniciado: lobby.iniciado });
-      if (lobby.iniciado) emitirA(io, userId, "estado", lobby.engine.estadoPublico(userId));
+      cb?.({ ok: true, lobby, iniciado: lobby.iniciado, esEspectador });
+      if (lobby.iniciado) emitirA(io, userId, "estado", lobby.engine.estadoPublico(userId, esEspectador));
     } catch (e) { cb?.({ ok: false, error: e.message }); }
   });
 

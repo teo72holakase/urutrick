@@ -4,7 +4,7 @@ import { useTheme } from "../../context/ThemeContext";
 import PlayingCard from "./PlayingCard";
 import TurnTimer from "./TurnTimer";
 
-export default function GameTable({ lobby, userId }) {
+export default function GameTable({ lobby, userId, esEspectador = false }) {
   const { diseñoCarta } = useTheme();
   const [estado, setEstado] = useState(null);
   const [finPartida, setFinPartida] = useState(null);
@@ -30,13 +30,13 @@ export default function GameTable({ lobby, userId }) {
   if (!estado) return <p>Repartiendo cartas...</p>;
 
   const jugadores = lobby.jugadores;
-  const esMiTurno = estado.turno === userId;
+  const esMiTurno = !esEspectador && estado.turno === userId;
   const miEquipo = jugadores.find((j) => j.id === userId)?.equipo;
   const cantoPendiente = estado.estadoCanto && !estado.estadoCanto.respondido;
-  const puedoResponderCanto = cantoPendiente && estado.estadoCanto.equipoQueResponde === miEquipo;
-  const esperandoRival = cantoPendiente && !puedoResponderCanto;
+  const puedoResponderCanto = !esEspectador && cantoPendiente && estado.estadoCanto.equipoQueResponde === miEquipo;
 
   function jugarCarta(cartaId) {
+    if (esEspectador) return;
     socket.emit("juego:jugar-carta", { lobbyId: lobby.id, cartaId });
   }
   function cantarTruco() { socket.emit("juego:cantar-truco", { lobbyId: lobby.id }); }
@@ -63,14 +63,84 @@ export default function GameTable({ lobby, userId }) {
     );
   }
 
-  // Para 1v1 ordenamos: yo abajo, rival arriba (más natural para jugar)
+  function Asiento({ j }) {
+    const esYo = !esEspectador && j.id === userId;
+    return (
+      <div className={`asiento ${esYo ? "asiento-yo" : ""}`}>
+        <div className="nombre-jugador">
+          <span className={j.equipo === "A" ? "chip-equipo-a" : "chip-equipo-b"}>{j.nombre}</span>
+          {lobby.jugadores[estado.manoIndex]?.id === j.id && <span className="icono-mano" title="Es mano">M</span>}
+          {estado.turno === j.id && <span className="icono-turno" title="Turno">👉</span>}
+        </div>
+        <div className={`fila-cartas ${recogiendo ? "recogiendo" : ""}`}>
+          {(estado.manos[j.id] || []).map((carta, i) => (
+            <div key={carta?.id || `${j.id}-${i}`} className="carta-repartida" style={{ animationDelay: `${i * 0.08}s` }}>
+              <PlayingCard
+                carta={carta}
+                tapada={!carta}
+                jugable={esYo && esMiTurno && !cantoPendiente && !!carta}
+                onClick={() => carta && jugarCarta(carta.id)}
+                diseño={diseñoCarta}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const CentroMesa = () => (
+    <div className="centro-mesa">
+      {estado.cartasJugadas.map((cj, i) => {
+        const nombreJ = jugadores.find((j) => j.id === cj.jugadorId)?.nombre || "";
+        return (
+          <div key={`${cj.carta.id}-${i}`} className="carta-jugada-anim">
+            <PlayingCard carta={cj.carta} diseño={diseñoCarta} />
+            <div className="etiqueta-jugada">{nombreJ}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // 1v1: rival arriba, jugadas en el medio, yo abajo (o los 2 jugadores en fila si espectador)
   const esUno = lobby.modo === "1v1";
-  const ordenados = esUno
-    ? [...jugadores].sort((a, b) => (a.id === userId ? 1 : b.id === userId ? -1 : 0))
-    : jugadores;
+  let contenidoMesa;
+  if (esUno && !esEspectador) {
+    const rival = jugadores.find((j) => j.id !== userId);
+    const yo = jugadores.find((j) => j.id === userId);
+    contenidoMesa = (
+      <div className="mesa-1v1">
+        {rival && <Asiento j={rival} />}
+        <CentroMesa />
+        {yo && <Asiento j={yo} />}
+      </div>
+    );
+  } else if (esUno && esEspectador) {
+    contenidoMesa = (
+      <div className="mesa-1v1">
+        <Asiento j={jugadores[1]} />
+        <CentroMesa />
+        <Asiento j={jugadores[0]} />
+      </div>
+    );
+  } else {
+    contenidoMesa = (
+      <div className="mesa-equipos">
+        <div className="fila-equipo">
+          {jugadores.filter((j) => j.equipo === "B").map((j) => <Asiento key={j.id} j={j} />)}
+        </div>
+        <CentroMesa />
+        <div className="fila-equipo">
+          {jugadores.filter((j) => j.equipo === "A").map((j) => <Asiento key={j.id} j={j} />)}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
+      {esEspectador && <p className="panel" style={{ textAlign: "center", marginBottom: "0.5rem" }}>👁 Estás espectando — ves todas las cartas</p>}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
         <span className="marcador">Equipo A: {estado.puntos.A} pts</span>
         <TurnTimer activo={esMiTurno && !cantoPendiente} segundos={20} resetKey={estado.turno} />
@@ -84,47 +154,10 @@ export default function GameTable({ lobby, userId }) {
             <PlayingCard carta={estado.muestra} diseño={diseñoCarta} className="carta-muestra" />
           </div>
         )}
-
-        <div className={esUno ? "asientos-1v1" : "asientos-grid"}>
-          {ordenados.map((j) => {
-            const esYo = j.id === userId;
-            return (
-              <div key={j.id} className={`asiento ${esYo ? "asiento-yo" : ""}`}>
-                <div className="nombre-jugador">
-                  <span className={j.equipo === "A" ? "chip-equipo-a" : "chip-equipo-b"}>{j.nombre}</span>
-                  {lobby.jugadores[estado.manoIndex]?.id === j.id && (
-                    <span className="icono-mano" title="Es mano">M</span>
-                  )}
-                  {estado.turno === j.id && <span className="icono-turno" title="Turno">👉</span>}
-                </div>
-                <div className={`fila-cartas ${recogiendo ? "recogiendo" : ""}`}>
-                  {(estado.manos[j.id] || []).map((carta, i) => (
-                    <div key={carta?.id || `${j.id}-${i}`} className="carta-repartida" style={{ animationDelay: `${i * 0.08}s` }}>
-                      <PlayingCard
-                        carta={carta}
-                        tapada={!carta}
-                        jugable={esYo && esMiTurno && !cantoPendiente && !!carta}
-                        onClick={() => carta && jugarCarta(carta.id)}
-                        diseño={diseñoCarta}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="centro-mesa">
-          {estado.cartasJugadas.map((cj, i) => (
-            <div key={`${cj.carta.id}-${i}`} className="carta-jugada-anim">
-              <PlayingCard carta={cj.carta} diseño={diseñoCarta} />
-            </div>
-          ))}
-        </div>
+        {contenidoMesa}
       </div>
 
-      {cantoPendiente ? (
+      {!esEspectador && (cantoPendiente ? (
         <div className="panel" style={{ marginTop: "1rem", textAlign: "center" }}>
           <p>Canto: <b>{estado.estadoCanto.nivel}</b> ({estado.estadoCanto.tipo})</p>
           {puedoResponderCanto ? (
@@ -145,9 +178,9 @@ export default function GameTable({ lobby, userId }) {
           {estado.tengoFlor && <button className="btn" onClick={() => cantarFlor("flor")}>🌸 Flor</button>}
           {estado.tengoFlor && <button className="btn" onClick={() => cantarFlor("contraflor")}>Contraflor</button>}
         </div>
-      )}
+      ))}
 
-      {estado.manoTerminada && (
+      {estado.manoTerminada && !esEspectador && (
         <div className="panel" style={{ marginTop: "1rem", textAlign: "center" }}>
           <p>Ganó la mano el equipo {estado.ganadorMano}</p>
           <button className="btn" onClick={siguienteMano}>Siguiente mano</button>

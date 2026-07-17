@@ -30,6 +30,7 @@ export class LobbyManager {
       password: password || null,
       verCartasCompanero: !!verCartasCompanero,
       jugadores: [{ id: creador.id, nombre: creador.nombre, equipo: "A" }],
+      espectadores: [], // [{id, nombre}]
       iniciado: false,
       engine: null,
     };
@@ -49,11 +50,21 @@ export class LobbyManager {
     return lobby;
   }
 
+  espectar(lobbyId, { id, nombre }) {
+    const lobby = this.lobbies.get(lobbyId);
+    if (!lobby) throw new Error("Lobby no existe");
+    if (!lobby.espectadores.some((e) => e.id === id)) {
+      lobby.espectadores.push({ id, nombre });
+    }
+    return lobby;
+  }
+
   salir(lobbyId, jugadorId) {
     const lobby = this.lobbies.get(lobbyId);
     if (!lobby) return;
     lobby.jugadores = lobby.jugadores.filter((j) => j.id !== jugadorId);
-    if (lobby.jugadores.length === 0) this.lobbies.delete(lobbyId);
+    lobby.espectadores = lobby.espectadores.filter((e) => e.id !== jugadorId);
+    if (lobby.jugadores.length === 0 && lobby.espectadores.length === 0) this.lobbies.delete(lobbyId);
   }
 
   iniciar(lobbyId) {
@@ -67,5 +78,10 @@ export class LobbyManager {
 
   get(lobbyId) {
     return this.lobbies.get(lobbyId);
+  }
+
+  esJugador(lobbyId, userId) {
+    const lobby = this.lobbies.get(lobbyId);
+    return !!lobby?.jugadores.some((j) => j.id === userId);
   }
 }

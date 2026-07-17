@@ -72,7 +72,7 @@ export class GameEngine {
   }
 
   equipoDe(jugadorId) {
-    return this.lobby.jugadores.find((j) => j.id === jugadorId).equipo;
+    return this.lobby.jugadores.find((j) => j.id === jugadorId)?.equipo ?? null;
   }
 
   resolverBaza() {
@@ -264,7 +264,7 @@ export class GameEngine {
     this.reset();
   }
 
-  estadoPublico(paraJugadorId) {
+  estadoPublico(paraJugadorId, esEspectador = false) {
     const jugadores = this.lobby.jugadores;
     const verCartasCompanero = this.lobby.verCartasCompanero;
     const equipoPropio = this.equipoDe(paraJugadorId);
@@ -278,10 +278,10 @@ export class GameEngine {
       estadoCanto: this.estadoCanto,
       manoTerminada: this.manoTerminada,
       ganadorMano: this.ganadorMano,
-      tengoFlor: this.bazas.length === 0 && !this.florResuelta && this.tieneFlor(paraJugadorId),
+      tengoFlor: !esEspectador && this.bazas.length === 0 && !this.florResuelta && this.tieneFlor(paraJugadorId),
       manos: Object.fromEntries(
         jugadores.map((j) => {
-          const mostrar = j.id === paraJugadorId || (verCartasCompanero && j.equipo === equipoPropio);
+          const mostrar = esEspectador || j.id === paraJugadorId || (verCartasCompanero && j.equipo === equipoPropio);
           return [j.id, mostrar ? this.manos[j.id] : this.manos[j.id].map(() => null)];
         })
       ),
