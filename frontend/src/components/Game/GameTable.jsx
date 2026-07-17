@@ -1,33 +1,35 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { socket } from "../../lib/socket";
-import { useTheme } from "../../context/ThemeContext";
 import PlayingCard from "./PlayingCard";
 import TurnTimer from "./TurnTimer";
 
-export default function GameTable({ lobby, userId, esEspectador = false }) {
-  const { diseñoCarta } = useTheme();
-  const [estado, setEstado] = useState(null);
-  const [finPartida, setFinPartida] = useState(null);
+export default function GameTable({ lobby, userId, esEspectador = false, estado, finPartida, onVolverMenu }) {
   const [recogiendo, setRecogiendo] = useState(false);
+  const [cuentaMano, setCuentaMano] = useState(6);
+  const manoIndexRef = useRef(null);
+  const cuentaRef = useRef(null);
 
+  // Animación de "recoger cartas" cuando cambia la mano.
   useEffect(() => {
-    socket.on("estado", (e) => {
-      setEstado((prev) => {
-        if (prev && prev.manoIndex !== e.manoIndex) {
-          setRecogiendo(true);
-          setTimeout(() => setRecogiendo(false), 500);
-        }
-        return e;
-      });
-    });
-    socket.on("fin-partida", setFinPartida);
-    return () => {
-      socket.off("estado");
-      socket.off("fin-partida", setFinPartida);
-    };
-  }, []);
+    if (!estado) return;
+    if (manoIndexRef.current !== null && manoIndexRef.current !== estado.manoIndex) {
+      setRecogiendo(true);
+      setTimeout(() => setRecogiendo(false), 500);
+    }
+    manoIndexRef.current = estado.manoIndex;
+  }, [estado?.manoIndex]);
 
-  if (!estado) return <p>Repartiendo cartas...</p>;
+  // Cuenta regresiva visual de 6s cuando termina una mano (el backend avanza solo, esto es solo el indicador).
+  useEffect(() => {
+    clearInterval(cuentaRef.current);
+    if (estado?.manoTerminada) {
+      setCuentaMano(6);
+      cuentaRef.current = setInterval(() => setCuentaMano((c) => (c > 0 ? c - 1 : 0)), 1000);
+    }
+    return () => clearInterval(cuentaRef.current);
+  }, [estado?.manoTerminada, estado?.manoIndex]);
+
+  if (!estado) return <p style={{ textAlign: "center" }}>Repartiendo cartas...</p>;
 
   const jugadores = lobby.jugadores;
   const esMiTurno = !esEspectador && estado.turno === userId;
@@ -45,7 +47,6 @@ export default function GameTable({ lobby, userId, esEspectador = false }) {
   function responderEnvido(q) { socket.emit("juego:responder-envido", { lobbyId: lobby.id, quiero: q }); }
   function cantarFlor(tipo) { socket.emit("juego:cantar-flor", { lobbyId: lobby.id, tipo }); }
   function responderFlor(q) { socket.emit("juego:responder-flor", { lobbyId: lobby.id, quiero: q }); }
-  function siguienteMano() { socket.emit("juego:siguiente-mano", { lobbyId: lobby.id }); }
 
   function responder(q) {
     const t = estado.estadoCanto.tipo;
@@ -59,6 +60,7 @@ export default function GameTable({ lobby, userId, esEspectador = false }) {
       <div className="panel" style={{ textAlign: "center" }}>
         <h2 className="titulo">¡Partida terminada!</h2>
         <p>Ganó el equipo {finPartida.ganador} ({finPartida.puntos.A} - {finPartida.puntos.B})</p>
+        <button className="btn" onClick={onVolverMenu}>Volver al menú</button>
       </div>
     );
   }
@@ -80,7 +82,6 @@ export default function GameTable({ lobby, userId, esEspectador = false }) {
                 tapada={!carta}
                 jugable={esYo && esMiTurno && !cantoPendiente && !!carta}
                 onClick={() => carta && jugarCarta(carta.id)}
-                diseño={diseñoCarta}
               />
             </div>
           ))}
@@ -95,7 +96,7 @@ export default function GameTable({ lobby, userId, esEspectador = false }) {
         const nombreJ = jugadores.find((j) => j.id === cj.jugadorId)?.nombre || "";
         return (
           <div key={`${cj.carta.id}-${i}`} className="carta-jugada-anim">
-            <PlayingCard carta={cj.carta} diseño={diseñoCarta} />
+            <PlayingCard carta={cj.carta} />
             <div className="etiqueta-jugada">{nombreJ}</div>
           </div>
         );
@@ -103,7 +104,6 @@ export default function GameTable({ lobby, userId, esEspectador = false }) {
     </div>
   );
 
-  // 1v1: rival arriba, jugadas en el medio, yo abajo (o los 2 jugadores en fila si espectador)
   const esUno = lobby.modo === "1v1";
   let contenidoMesa;
   if (esUno && !esEspectador) {
@@ -140,18 +140,24 @@ export default function GameTable({ lobby, userId, esEspectador = false }) {
 
   return (
     <div>
-      {esEspectador && <p className="panel" style={{ textAlign: "center", marginBottom: "0.5rem" }}>👁 Estás espectando — ves todas las cartas</p>}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+      {esEspectador && (
+        <div className="panel" style={{ textAlign: "center", marginBottom: "0.5rem" }}>
+          👁 Estás espectando — ves todas las cartas
+          <div><button className="btn btn-secundario" style={{ marginTop: "0.5rem" }} onClick={onVolverMenu}>Volver al menú</button></div>
+        </div>
+      )}
+      <div className="marcador-fila">
         <span className="marcador">Equipo A: {estado.puntos.A} pts</span>
         <TurnTimer activo={esMiTurno && !cantoPendiente} segundos={20} resetKey={estado.turno} />
         <span className="marcador">Equipo B: {estado.puntos.B} pts</span>
       </div>
+      <p className="texto-suave" style={{ textAlign: "center", margin: "0 0 0.5rem" }}>Partida a {lobby.puntajeLimite || 30} tantos</p>
 
       <div className="mesa">
         {estado.muestra && (
           <div className="muestra-zona">
             <div className="mazo-tapado" />
-            <PlayingCard carta={estado.muestra} diseño={diseñoCarta} className="carta-muestra" />
+            <PlayingCard carta={estado.muestra} className="carta-muestra" />
           </div>
         )}
         {contenidoMesa}
@@ -161,16 +167,16 @@ export default function GameTable({ lobby, userId, esEspectador = false }) {
         <div className="panel" style={{ marginTop: "1rem", textAlign: "center" }}>
           <p>Canto: <b>{estado.estadoCanto.nivel}</b> ({estado.estadoCanto.tipo})</p>
           {puedoResponderCanto ? (
-            <>
+            <div className="acciones-canto">
               <button className="btn" onClick={() => responder(true)}>Quiero</button>
               <button className="btn btn-secundario" onClick={() => responder(false)}>No quiero</button>
-            </>
+            </div>
           ) : (
             <p className="texto-suave">Esperando respuesta del rival...</p>
           )}
         </div>
       ) : (
-        <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem", flexWrap: "wrap" }}>
+        <div className="acciones-canto">
           <button className="btn" onClick={cantarTruco}>Truco</button>
           <button className="btn" onClick={() => cantarEnvido("envido")}>Envido</button>
           <button className="btn" onClick={() => cantarEnvido("real-envido")}>Real Envido</button>
@@ -180,10 +186,9 @@ export default function GameTable({ lobby, userId, esEspectador = false }) {
         </div>
       ))}
 
-      {estado.manoTerminada && !esEspectador && (
+      {estado.manoTerminada && (
         <div className="panel" style={{ marginTop: "1rem", textAlign: "center" }}>
-          <p>Ganó la mano el equipo {estado.ganadorMano}</p>
-          <button className="btn" onClick={siguienteMano}>Siguiente mano</button>
+          <p>Ganó la mano el equipo {estado.ganadorMano} — siguiente mano en {cuentaMano}s</p>
         </div>
       )}
     </div>

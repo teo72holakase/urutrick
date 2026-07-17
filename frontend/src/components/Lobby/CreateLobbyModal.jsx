@@ -6,10 +6,11 @@ export default function CreateLobbyModal({ onCrear, onClose }) {
   const [tienePassword, setTienePassword] = useState(false);
   const [password, setPassword] = useState("");
   const [verCartasCompanero, setVerCartasCompanero] = useState(false);
+  const [puntajeLimite, setPuntajeLimite] = useState(30);
 
   function submit(e) {
     e.preventDefault();
-    onCrear({ nombre, modo, password: tienePassword ? password : null, verCartasCompanero });
+    onCrear({ nombre, modo, password: tienePassword ? password : null, verCartasCompanero, puntajeLimite });
   }
 
   return (
@@ -24,6 +25,14 @@ export default function CreateLobbyModal({ onCrear, onClose }) {
               <option value="1v1">1 vs 1</option>
               <option value="2v2">2 vs 2</option>
               <option value="3v3">3 vs 3</option>
+            </select>
+          </label>
+          <label>
+            Puntaje de la partida
+            <select value={puntajeLimite} onChange={(e) => setPuntajeLimite(Number(e.target.value))} style={{ width: "100%" }}>
+              <option value={15}>15 tantos</option>
+              <option value={30}>30 tantos</option>
+              <option value={40}>40 tantos</option>
             </select>
           </label>
           <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>

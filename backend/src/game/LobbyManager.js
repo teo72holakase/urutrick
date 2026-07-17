@@ -10,18 +10,19 @@ export class LobbyManager {
 
   listarPublicos() {
     return [...this.lobbies.values()]
-      .filter((l) => !l.iniciado)
       .map((l) => ({
         id: l.id,
         nombre: l.nombre,
         modo: l.modo,
+        puntajeLimite: l.puntajeLimite,
         jugadores: l.jugadores.length,
         capacidad: CAPACIDAD[l.modo],
         tienePassword: !!l.password,
+        iniciado: l.iniciado,
       }));
   }
 
-  crear({ nombre, modo, password, verCartasCompanero, creador }) {
+  crear({ nombre, modo, password, verCartasCompanero, puntajeLimite, creador }) {
     const id = uuid().slice(0, 8);
     const lobby = {
       id,
@@ -29,6 +30,7 @@ export class LobbyManager {
       modo, // '1v1' | '2v2' | '3v3'
       password: password || null,
       verCartasCompanero: !!verCartasCompanero,
+      puntajeLimite: [15, 30, 40].includes(puntajeLimite) ? puntajeLimite : 30,
       jugadores: [{ id: creador.id, nombre: creador.nombre, equipo: "A" }],
       espectadores: [], // [{id, nombre}]
       iniciado: false,

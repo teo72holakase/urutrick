@@ -24,7 +24,7 @@ export default function WaitingRoom({ lobby, onIniciar }) {
   return (
     <div className="panel">
       <h2 className="titulo">Sala: {lobby.nombre}</h2>
-      <p>Modo: {lobby.modo} — Código: <b>{lobby.id}</b></p>
+      <p>Modo: {lobby.modo} — Puntaje: {lobby.puntajeLimite || 30} tantos — Código: <b>{lobby.id}</b></p>
       <h3>Jugadores ({jugadores.length}/{CAPACIDAD[lobby.modo]})</h3>
       <ul>
         {jugadores.map((j) => <li key={j.id}>{j.nombre} — Equipo {j.equipo}</li>)}

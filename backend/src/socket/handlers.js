@@ -4,11 +4,23 @@ import { guardarHistorial } from "../lib/appwrite.js";
 
 const lobbyManager = new LobbyManager();
 const timers = new Map(); // lobbyId -> TurnTimer
+const sigManoTimers = new Map(); // lobbyId -> setTimeout handle
 const conexiones = new Map(); // userId -> socket.id actual
 
 function emitirA(io, userId, evento, payload) {
   const sid = conexiones.get(userId);
   if (sid) io.to(sid).emit(evento, payload);
+}
+
+function programarSiguienteMano(io, lobby) {
+  if (sigManoTimers.has(lobby.id)) return;
+  const handle = setTimeout(() => {
+    sigManoTimers.delete(lobby.id);
+    lobby.engine.siguienteMano();
+    emitirEstado(io, lobby);
+    armarTimerJugada(io, lobby);
+  }, 6000);
+  sigManoTimers.set(lobby.id, handle);
 }
 
 function emitirEstado(io, lobby) {
@@ -23,6 +35,8 @@ function emitirEstado(io, lobby) {
     io.to(lobby.id).emit("fin-partida", { ganador, puntos: lobby.engine.puntos });
     timers.get(lobby.id)?.cancelar();
     guardarHistorial(lobby, ganador).catch((e) => console.error("No se pudo guardar historial:", e.message));
+  } else if (lobby.engine.manoTerminada) {
+    programarSiguienteMano(io, lobby);
   }
 }
 

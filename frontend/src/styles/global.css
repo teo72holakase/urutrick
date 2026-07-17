@@ -96,22 +96,13 @@ input, select {
 }
 
 .carta {
-  width: 64px;
-  height: 80px;
-  border-radius: 8px;
-  border: 2px solid #222;
-  background: #fdf6e3;
-  background-repeat: no-repeat;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  color: #222;
+  width: 62px;
+  height: 95.8px; /* proporción real 73x113 */
+  border-radius: 6px;
   box-shadow: 2px 2px 6px var(--sombra);
   user-select: none;
-}
-.carta.tapada {
-  background: repeating-linear-gradient(45deg, var(--acento-2), var(--acento-2) 6px, var(--madera-3) 6px, var(--madera-3) 12px);
+  object-fit: fill;
+  display: block;
 }
 .carta.jugable:hover { transform: translateY(-8px); cursor: pointer; }
 
@@ -164,9 +155,21 @@ input, select {
 }
 .fila-cartas.recogiendo .carta { animation: recogerCartas 0.45s ease-in forwards; }
 
-.diseño-taberna.carta-sprite { filter: sepia(0.35) saturate(1.2); }
-.diseño-minimal.carta-sprite { filter: grayscale(0.6) contrast(1.05); }
+.header-app {
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1rem;
+}
+.header-acciones { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; }
 
+.acciones-canto {
+  display: flex; gap: 0.5rem; margin-top: 1rem;
+  flex-wrap: wrap; justify-content: center;
+}
+
+.marcador-fila {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.25rem;
+}
 .marcador { font-family: "Rye", cursive; color: var(--acento); font-size: 0.95rem; }
 .texto-suave { color: var(--texto-suave); }
 
@@ -175,13 +178,14 @@ input, select {
   display: flex; align-items: center; z-index: 2;
 }
 .mazo-tapado {
-  width: 48px; height: 60px; border-radius: 6px;
-  background: repeating-linear-gradient(45deg, var(--acento-2), var(--acento-2) 6px, var(--madera-3) 6px, var(--madera-3) 12px);
-  border: 2px solid #222;
-  margin-right: -30px;
+  width: 42px; height: 65px; border-radius: 6px;
+  background-image: url(/cards/back.png);
+  background-size: cover;
+  border: 1px solid rgba(0,0,0,0.4);
+  margin-right: -22px;
   box-shadow: 2px 2px 6px var(--sombra);
 }
-.carta-muestra { transform: rotate(90deg) translate(6px, -6px); width: 48px; height: 60px; }
+.carta-muestra { width: 42px; height: 65px; }
 
 .mesa-1v1 {
   display: flex; flex-direction: column; justify-content: space-between;
@@ -217,14 +221,23 @@ input, select {
 }
 
 @media (max-width: 600px) {
-  .carta { width: 46px; height: 57.5px; }
-  .mazo-tapado, .carta-muestra { width: 34px; height: 42.5px; }
+  .carta { width: 46px; height: 71.3px; }
+  .mazo-tapado, .carta-muestra { width: 32px; height: 49.5px; }
+  .mazo-tapado { margin-right: -16px; }
   .mesa-1v1, .mesa-equipos { padding-top: 3rem; }
   .mesa-1v1 { min-height: 48vh; }
   .mesa-equipos { min-height: 52vh; }
   .fila-equipo { gap: 0.6rem; }
-  .nombre-jugador { font-size: 0.8rem; }
-  .chip-equipo-a, .chip-equipo-b { padding: 1px 6px; font-size: 0.75rem; }
-  .btn { padding: 0.5rem 0.8rem; font-size: 0.85rem; }
+  .nombre-jugador { font-size: 0.78rem; }
+  .chip-equipo-a, .chip-equipo-b { padding: 1px 6px; font-size: 0.72rem; }
+  .btn { padding: 0.45rem 0.65rem; font-size: 0.78rem; }
+  .acciones-canto .btn { flex: 1 1 auto; min-width: 0; }
   .etiqueta-jugada { font-size: 0.6rem; }
+  .header-app { justify-content: center; text-align: center; }
+  .header-acciones { justify-content: center; }
+}
+
+@media (max-width: 360px) {
+  .carta { width: 38px; height: 58.7px; }
+  .btn { padding: 0.4rem 0.5rem; font-size: 0.72rem; }
 }

@@ -7,7 +7,7 @@ const PUNTOS_FLOR = { flor: 3, contraflor: 6, "contraflor-al-resto": null };
 export class GameEngine {
   constructor(lobby) {
     this.lobby = lobby; // { id, modo: '1v1'|'2v2'|'3v3', jugadores: [{id,nombre,equipo}], verCartasCompanero }
-    this.puntajeLimite = 30;
+    this.puntajeLimite = lobby.puntajeLimite || 30;
     this.puntos = { A: 0, B: 0 };
     this.manoIndex = 0; // índice del jugador mano
     this.reset();
