@@ -2,9 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { LobbyManager } from "../game/LobbyManager.js";
-import { TurnTimer, TIEMPOS } from "../game/Timer.js";
-import { guardarHistorial } from "../lib/appwrite.js";
+import { LobbyManager } from "./game/LobbyManager.js";
+import { TurnTimer, TIEMPOS } from "./game/Timer.js";
+import { guardarHistorial } from "./lib/appwrite.js";
 import dotenv from 'dotenv';
 
 dotenv.config();
