@@ -1,6 +1,58 @@
+import express from 'express';
+import cors from 'cors';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import { LobbyManager } from "../game/LobbyManager.js";
 import { TurnTimer, TIEMPOS } from "../game/Timer.js";
 import { guardarHistorial } from "../lib/appwrite.js";
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const app = express();
+const server = createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: [
+      'https://urutrick.vercel.app',
+      'https://urutrick.vercel.app/',
+      'http://localhost:10000'
+    ],
+    methods: ['GET', 'POST', 'OPTIONS'],
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization']
+  },
+  transports: ['websocket', 'polling'],
+  allowEIO3: true,
+  pingTimeout: 60000,
+  pingInterval: 25000
+});
+
+// ✅ MIDDLEWARE CORS para Express
+app.use(cors({
+  origin: [
+    'https://urutrick.vercel.app',
+    'https://urutrick.vercel.app/',
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:10000'
+  ],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+app.use(express.json());
+
+// ✅ Health check para Render (keep-alive)
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// ✅ Keep-alive para evitar que Render duerma el servicio
+setInterval(() => {
+  console.log('💓 Keep-alive ping');
+}, 14 * 60 * 1000); // Cada 14 minutos
 
 const lobbyManager = new LobbyManager();
 const timers = new Map(); // lobbyId -> TurnTimer
@@ -243,3 +295,24 @@ export function registrarHandlers(io, socket) {
     if (conexiones.get(userId) === socket.id) conexiones.delete(userId);
   });
 }
+
+// ✅ Iniciar servidor
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, () => {
+  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+  console.log(`✅ CORS permitido para: https://urutrick.vercel.app, http://localhost:5173`);
+});
+
+// ✅ Manejo de errores
+server.on('error', (error) => {
+  console.error('❌ Error en el servidor:', error);
+});
+
+// ✅ Cierre gracial
+process.on('SIGTERM', () => {
+  console.log('🛑 Recibido SIGTERM, cerrando servidor...');
+  server.close(() => {
+    console.log('✅ Servidor cerrado');
+    process.exit(0);
+  });
+});

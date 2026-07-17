@@ -92,8 +92,16 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
   const miEquipo = jugadores.find((j) => j.id === userId)?.equipo;
   const cantoPendiente = estado.estadoCanto && !estado.estadoCanto.respondido;
   const puedoResponderCanto = !esEspectador && cantoPendiente && estado.estadoCanto.equipoQueResponde === miEquipo;
-  const nombreEquipoA = esUno ? (jugadores.find((j) => j.equipo === "A")?.nombre || "Equipo A") : "Equipo A";
-  const nombreEquipoB = esUno ? (jugadores.find((j) => j.equipo === "B")?.nombre || "Equipo B") : "Equipo B";
+  const jugadorA = jugadores?.find((j) => j.equipo === "A");
+const jugadorB = jugadores?.find((j) => j.equipo === "B");
+
+const nombreEquipoA = esUno && jugadorA 
+  ? jugadorA.nombre 
+  : "Equipo A";
+  
+const nombreEquipoB = esUno && jugadorB 
+  ? jugadorB.nombre 
+  : "Equipo B";
 
   function jugarCarta(cartaId) {
     if (esEspectador) return;
