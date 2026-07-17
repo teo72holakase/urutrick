@@ -28,8 +28,11 @@ Como el repo tiene frontend/ y backend/ juntos, en Render y Vercel vas a configu
 4. En **Auth > Settings > Platforms**, agregá una plataforma Web con el dominio:
    - `http://localhost:5173` (para desarrollo)
    - `https://tu-app.vercel.app` (para producción, lo agregás después del deploy)
-5. (Opcional, para más adelante) Creá una Database "truco" con una colección "perfiles" si querés guardar estadísticas, avatar, etc. El MVP actual solo usa el Auth de Appwrite; no hace falta DB para arrancar.
-6. No hace falta API Key en el backend salvo que luego quieras validar sesiones server-side (dejé el .env preparado para eso).
+5. Creá una **Database** llamada `truco` y anotá su **Database ID**. Adentro creá 2 colecciones:
+   - **historial** (atributos: `lobbyId` string, `modo` string, `jugadores` string[] array, `equipoGanador` string, `puntosA` integer, `puntosB` integer, `fecha` string)
+   - **ranking** (atributos: `userId` string, `nombre` string, `victorias` integer, `derrotas` integer)
+   - En Permissions de ambas colecciones, dale acceso solo a "Server" (el backend escribe con su API Key).
+6. En **Settings > API Keys**, creá una key con scopes `databases.read` y `databases.write`. Es para el backend únicamente, nunca la pongas en el frontend.
 
 ## 3. Backend en Render
 1. En https://render.com → **New > Web Service**, conectá tu repo de GitHub.
@@ -38,7 +41,9 @@ Como el repo tiene frontend/ y backend/ juntos, en Render y Vercel vas a configu
 4. Start Command: `npm start`
 5. Variables de entorno (Environment):
    - `CORS_ORIGIN` = `https://tu-app.vercel.app` (lo actualizás después de crear el frontend)
-   - `APPWRITE_ENDPOINT`, `APPWRITE_PROJECT_ID` (opcional por ahora)
+   - `APPWRITE_ENDPOINT`, `APPWRITE_PROJECT_ID`, `APPWRITE_API_KEY`, `APPWRITE_DATABASE_ID`
+   - `APPWRITE_HISTORIAL_COLLECTION_ID` = `historial`, `APPWRITE_RANKING_COLLECTION_ID` = `ranking`
+   - Si dejás estas variables vacías, el juego funciona igual: simplemente no guarda historial/ranking.
 6. Deploy. Anotá la URL pública, ej: `https://truco-backend.onrender.com`
 
 > Nota: el plan free de Render duerme el servicio tras inactividad, lo que puede dar un primer socket.connect() lento. Para producción real conviene un plan pago o un ping keep-alive.
@@ -70,18 +75,20 @@ npm install
 npm run dev
 ```
 
-## Qué incluye este MVP
-- Registro/login con Appwrite (email + contraseña).
+## Qué incluye
+- Registro/login solo con usuario + contraseña (Appwrite Auth por debajo, sin pedir email al jugador).
 - Crear/unirse a lobbies 1v1, 2v2, 3v3 con contraseña opcional y opción "ver cartas del compañero".
-- Sincronización de partida en tiempo real (Socket.IO): reparto, turnos, jugar cartas, truco (truco/retruco/vale4), envido/real envido/falta envido.
-- Temporizador de turno: si no jugás a tiempo, tira una carta al azar; si hay un canto pendiente, responde "No quiero" automático.
-- Tema claro/oscuro, selector de diseño de carta, ícono de "mano".
+- Sincronización en tiempo real: reparto, turnos, truco (truco/retruco/vale4), envido/real envido/falta envido y **Flor/Contraflor**.
+- Temporizador de turno con auto-jugada / auto "no quiero" al vencerse.
+- Reconexión tras refresh: la identidad del jugador es su Appwrite user ID (no el socket.id), así que si recargás la página volvés a tu mesa automáticamente.
+- Historial de partidas y ranking (victorias/derrotas) guardado en Appwrite Database al terminar cada partida.
+- Tema claro/oscuro con fondo de madera, selector de diseño de carta, ícono de "mano".
+- Animaciones de reparto y de jugada de carta.
 - Popup de reglas con tabs (Cartas / 1v1 / 2v2 / 3v3 / Cantos).
 
-## Próximos pasos sugeridos (para pedir en el chat)
-- Flor (falta implementar el canto completo).
-- Reconexión tras refresh (persistir sesión de partida por usuario, hoy el id de jugador es el socket.id).
-- Guardar historial y ranking en Appwrite Database.
-- Animaciones de reparto/jugada.
+## Próximos pasos sugeridos
+- Si un jugador se desconecta y nunca vuelve, su asiento queda reservado (no hay timeout de expulsión todavía).
+- Pantalla de ranking/historial visible en el frontend (hoy solo se guarda en la DB).
+- Sonidos y más diseños de baraja.
 
 Cuando quieras que cambie algo puntual, decime el archivo o la función y lo edito directo sin repetir todo el proyecto.

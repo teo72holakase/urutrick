@@ -32,6 +32,8 @@ export default function GameTable({ lobby, userId }) {
   function responderTruco(q) { socket.emit("juego:responder-truco", { lobbyId: lobby.id, quiero: q }); }
   function cantarEnvido(tipo) { socket.emit("juego:cantar-envido", { lobbyId: lobby.id, tipo }); }
   function responderEnvido(q) { socket.emit("juego:responder-envido", { lobbyId: lobby.id, quiero: q }); }
+  function cantarFlor(tipo) { socket.emit("juego:cantar-flor", { lobbyId: lobby.id, tipo }); }
+  function responderFlor(q) { socket.emit("juego:responder-flor", { lobbyId: lobby.id, quiero: q }); }
   function siguienteMano() { socket.emit("juego:siguiente-mano", { lobbyId: lobby.id }); }
 
   if (finPartida) {
@@ -62,14 +64,15 @@ export default function GameTable({ lobby, userId }) {
             </div>
             <div style={{ display: "flex", gap: "0.3rem" }}>
               {(estado.manos[j.id] || []).map((carta, i) => (
-                <PlayingCard
-                  key={i}
-                  carta={carta}
-                  tapada={!carta}
-                  jugable={j.id === userId && esMiTurno && !cantoPendiente && !!carta}
-                  onClick={() => carta && jugarCarta(carta.id)}
-                  diseño={diseñoCarta}
-                />
+                <div key={carta?.id || i} className="carta-repartida" style={{ animationDelay: `${i * 0.08}s` }}>
+                  <PlayingCard
+                    carta={carta}
+                    tapada={!carta}
+                    jugable={j.id === userId && esMiTurno && !cantoPendiente && !!carta}
+                    onClick={() => carta && jugarCarta(carta.id)}
+                    diseño={diseñoCarta}
+                  />
+                </div>
               ))}
             </div>
           </div>
@@ -77,7 +80,9 @@ export default function GameTable({ lobby, userId }) {
 
         <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center", marginTop: "1rem" }}>
           {estado.cartasJugadas.map((cj, i) => (
-            <PlayingCard key={i} carta={cj.carta} diseño={diseñoCarta} />
+            <div key={`${cj.carta.id}-${i}`} className="carta-jugada-anim">
+              <PlayingCard carta={cj.carta} diseño={diseñoCarta} />
+            </div>
           ))}
         </div>
       </div>
@@ -85,8 +90,18 @@ export default function GameTable({ lobby, userId }) {
       {cantoPendiente ? (
         <div className="panel" style={{ marginTop: "1rem", textAlign: "center" }}>
           <p>Canto: <b>{estado.estadoCanto.nivel}</b> ({estado.estadoCanto.tipo})</p>
-          <button className="btn" onClick={() => estado.estadoCanto.tipo === "truco" ? responderTruco(true) : responderEnvido(true)}>Quiero</button>
-          <button className="btn btn-secundario" onClick={() => estado.estadoCanto.tipo === "truco" ? responderTruco(false) : responderEnvido(false)}>No quiero</button>
+          <button className="btn" onClick={() => {
+            const t = estado.estadoCanto.tipo;
+            if (t === "truco") responderTruco(true);
+            else if (t === "flor") responderFlor(true);
+            else responderEnvido(true);
+          }}>Quiero</button>
+          <button className="btn btn-secundario" onClick={() => {
+            const t = estado.estadoCanto.tipo;
+            if (t === "truco") responderTruco(false);
+            else if (t === "flor") responderFlor(false);
+            else responderEnvido(false);
+          }}>No quiero</button>
         </div>
       ) : (
         <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem", flexWrap: "wrap" }}>
@@ -94,6 +109,8 @@ export default function GameTable({ lobby, userId }) {
           <button className="btn" onClick={() => cantarEnvido("envido")}>Envido</button>
           <button className="btn" onClick={() => cantarEnvido("real-envido")}>Real Envido</button>
           <button className="btn" onClick={() => cantarEnvido("falta-envido")}>Falta Envido</button>
+          {estado.tengoFlor && <button className="btn" onClick={() => cantarFlor("flor")}>🌸 Flor</button>}
+          {estado.tengoFlor && <button className="btn" onClick={() => cantarFlor("contraflor")}>Contraflor</button>}
         </div>
       )}
 

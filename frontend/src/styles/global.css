@@ -32,9 +32,13 @@ body {
   margin: 0;
   font-family: "Cabin", sans-serif;
   color: var(--texto);
-  background:
-    repeating-linear-gradient(90deg, var(--madera-1) 0px, var(--madera-2) 12px, var(--madera-1) 24px),
-    var(--madera-1);
+  background-color: var(--madera-1);
+  background-image:
+    radial-gradient(ellipse at 15% 10%, rgba(255,255,255,0.06), transparent 55%),
+    radial-gradient(ellipse at 85% 90%, rgba(0,0,0,0.25), transparent 60%),
+    repeating-linear-gradient(95deg, rgba(0,0,0,0.06) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0) 100px, rgba(0,0,0,0.05) 102px),
+    linear-gradient(155deg, var(--madera-2) 0%, var(--madera-1) 45%, var(--madera-3) 100%);
+  background-attachment: fixed;
   min-height: 100vh;
 }
 
@@ -140,3 +144,15 @@ input, select {
 .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
 .tab { padding: 0.5rem 1rem; border-radius: 6px 6px 0 0; cursor: pointer; border: 2px solid var(--madera-3); background: transparent; color: var(--texto); }
 .tab.activo { background: var(--acento); color: #2b1c12; font-weight: 700; }
+
+@keyframes repartir {
+  from { opacity: 0; transform: translateY(-40px) rotate(-8deg); }
+  to { opacity: 1; transform: translateY(0) rotate(0deg); }
+}
+.carta-repartida { animation: repartir 0.4s ease-out backwards; }
+
+@keyframes jugarCarta {
+  from { opacity: 0; transform: scale(0.6) translateY(30px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.carta-jugada-anim { animation: jugarCarta 0.35s ease-out; }

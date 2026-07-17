@@ -4,9 +4,8 @@ import { useAuth } from "../../context/AuthContext";
 export default function AuthForm() {
   const { registrarse, iniciarSesion } = useAuth();
   const [modo, setModo] = useState("login");
-  const [email, setEmail] = useState("");
+  const [usuario, setUsuario] = useState("");
   const [password, setPassword] = useState("");
-  const [nombre, setNombre] = useState("");
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
 
@@ -15,8 +14,8 @@ export default function AuthForm() {
     setError("");
     setCargando(true);
     try {
-      if (modo === "login") await iniciarSesion(email, password);
-      else await registrarse(email, password, nombre);
+      if (modo === "login") await iniciarSesion(usuario, password);
+      else await registrarse(usuario, password);
     } catch (err) {
       setError(err.message || "Error de autenticación");
     } finally {
@@ -28,10 +27,7 @@ export default function AuthForm() {
     <div className="panel" style={{ maxWidth: 380, margin: "4rem auto" }}>
       <h1 className="titulo" style={{ textAlign: "center" }}>🃏 Truco Uruguayo</h1>
       <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
-        {modo === "registro" && (
-          <input placeholder="Nombre de usuario" value={nombre} onChange={(e) => setNombre(e.target.value)} required />
-        )}
-        <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <input placeholder="Usuario" value={usuario} onChange={(e) => setUsuario(e.target.value)} required minLength={3} />
         <input type="password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
         {error && <span style={{ color: "#e57373" }}>{error}</span>}
         <button className="btn" disabled={cargando}>{modo === "login" ? "Entrar" : "Crear cuenta"}</button>

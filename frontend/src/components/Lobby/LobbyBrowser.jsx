@@ -8,7 +8,6 @@ export default function LobbyBrowser({ nombreJugador, onEntrarLobby }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!socket.connected) socket.connect();
     socket.emit("lobby:listar", setLobbies);
     socket.on("lobby:actualizado", setLobbies);
     return () => socket.off("lobby:actualizado", setLobbies);

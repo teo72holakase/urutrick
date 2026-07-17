@@ -2,6 +2,7 @@ import { crearMazo, barajar, compararCartas } from "./Deck.js";
 
 const PUNTOS_TRUCO = { truco: 2, retruco: 3, vale4: 4 };
 const PUNTOS_ENVIDO = { envido: 2, "real-envido": 3, "falta-envido": null }; // falta-envido = puntos que faltan
+const PUNTOS_FLOR = { flor: 3, contraflor: 6, "contraflor-al-resto": null };
 
 export class GameEngine {
   constructor(lobby) {
@@ -30,6 +31,7 @@ export class GameEngine {
     this.trucoNivel = 0; // 0=nada,1=truco,2=retruco,3=vale4
     this.trucoGanadoPor = null;
     this.envidoResuelto = false;
+    this.florResuelta = false;
     this.manoTerminada = false;
     this.ganadorMano = null;
   }
@@ -190,6 +192,58 @@ export class GameEngine {
     return { quiero, ganador, mejorA, mejorB };
   }
 
+  // --- Flor (3 cartas del mismo palo) ---
+  tieneFlor(jugadorId) {
+    const cartas = this.manos[jugadorId];
+    if (cartas.length < 3) return false;
+    return cartas.every((c) => c.palo === cartas[0].palo);
+  }
+
+  calcularFlorJugador(jugadorId) {
+    const cartas = this.manos[jugadorId];
+    return 20 + cartas.reduce((sum, c) => sum + c.valorEnvido, 0);
+  }
+
+  cantarFlor(jugadorId, tipo = "flor") {
+    if (this.florResuelta) throw new Error("La flor ya se jugó esta mano");
+    if (this.bazas.length > 0) throw new Error("La flor solo se canta antes de la primera baza");
+    if (!this.tieneFlor(jugadorId)) throw new Error("No tenés flor");
+    const equipo = this.equipoDe(jugadorId);
+    this.estadoCanto = { tipo: "flor", nivel: tipo, equipoQueCanto: equipo, respondido: false };
+    this.envidoResuelto = true; // cantar flor anula el envido de esa mano
+    return this.estadoCanto;
+  }
+
+  responderFlor(jugadorId, quiero) {
+    if (!this.estadoCanto || this.estadoCanto.tipo !== "flor") throw new Error("No hay flor pendiente");
+    const equipoCanto = this.estadoCanto.equipoQueCanto;
+    this.estadoCanto.respondido = true;
+    this.florResuelta = true;
+    if (!quiero) {
+      const nivelPrevio = this.estadoCanto.nivel === "flor" ? null : "flor";
+      this.puntos[equipoCanto] += nivelPrevio ? PUNTOS_FLOR.flor : PUNTOS_FLOR.flor;
+      this.estadoCanto = null;
+      return { quiero, ganador: null };
+    }
+    let mejorA = -1, mejorB = -1, huboA = false, huboB = false;
+    for (const j of this.jugadoresOrdenados()) {
+      if (!this.tieneFlor(j.id)) continue;
+      const val = this.calcularFlorJugador(j.id);
+      if (j.equipo === "A") { mejorA = Math.max(mejorA, val); huboA = true; }
+      else { mejorB = Math.max(mejorB, val); huboB = true; }
+    }
+    const ganador = mejorA >= mejorB ? "A" : "B";
+    let puntos;
+    if (this.estadoCanto.nivel === "contraflor-al-resto") {
+      puntos = this.puntajeLimite - this.puntos[ganador];
+    } else {
+      puntos = PUNTOS_FLOR[this.estadoCanto.nivel] ?? 3;
+    }
+    this.puntos[ganador] += puntos;
+    this.estadoCanto = null;
+    return { quiero, ganador, mejorA, mejorB };
+  }
+
   finDePartida() {
     if (this.puntos.A >= this.puntajeLimite) return "A";
     if (this.puntos.B >= this.puntajeLimite) return "B";
@@ -215,6 +269,7 @@ export class GameEngine {
       estadoCanto: this.estadoCanto,
       manoTerminada: this.manoTerminada,
       ganadorMano: this.ganadorMano,
+      tengoFlor: this.bazas.length === 0 && !this.florResuelta && this.tieneFlor(paraJugadorId),
       manos: Object.fromEntries(
         jugadores.map((j) => {
           const mostrar = j.id === paraJugadorId || (verCartasCompanero && j.equipo === equipoPropio);
