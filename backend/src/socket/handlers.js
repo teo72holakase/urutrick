@@ -16,9 +16,14 @@ function programarSiguienteMano(io, lobby) {
   if (sigManoTimers.has(lobby.id)) return;
   const handle = setTimeout(() => {
     sigManoTimers.delete(lobby.id);
-    lobby.engine.siguienteMano();
-    emitirEstado(io, lobby);
-    armarTimerJugada(io, lobby);
+    try {
+      if (!lobby.engine) return; // la mesa pudo limpiarse mientras esperaba
+      lobby.engine.siguienteMano();
+      emitirEstado(io, lobby);
+      armarTimerJugada(io, lobby);
+    } catch (e) {
+      console.error(`Error en siguienteMano de mesa ${lobby.id}:`, e);
+    }
   }, 6000);
   sigManoTimers.set(lobby.id, handle);
 }
@@ -49,17 +54,22 @@ function emitirEstado(io, lobby) {
 function armarTimerJugada(io, lobby) {
   timers.get(lobby.id)?.cancelar();
   const timer = new TurnTimer(TIEMPOS.jugarCarta, () => {
-    const jugadorId = lobby.engine.jugadorActual().id;
-    if (lobby.engine.estadoCanto && !lobby.engine.estadoCanto.respondido) {
-      const tipo = lobby.engine.estadoCanto.tipo;
-      if (tipo === "truco") lobby.engine.responderTruco(jugadorId, false);
-      else if (tipo === "flor") lobby.engine.responderFlor(jugadorId, false);
-      else lobby.engine.responderEnvido(jugadorId, false);
-    } else {
-      lobby.engine.jugarCartaAleatoria(jugadorId);
+    try {
+      if (!lobby.engine) return;
+      const jugadorId = lobby.engine.jugadorActual().id;
+      if (lobby.engine.estadoCanto && !lobby.engine.estadoCanto.respondido) {
+        const tipo = lobby.engine.estadoCanto.tipo;
+        if (tipo === "truco") lobby.engine.responderTruco(jugadorId, false);
+        else if (tipo === "flor") lobby.engine.responderFlor(jugadorId, false);
+        else lobby.engine.responderEnvido(jugadorId, false);
+      } else {
+        lobby.engine.jugarCartaAleatoria(jugadorId);
+      }
+      emitirEstado(io, lobby);
+      if (!lobby.engine.manoTerminada) armarTimerJugada(io, lobby);
+    } catch (e) {
+      console.error(`Error en timer de jugada de mesa ${lobby.id}:`, e);
     }
-    emitirEstado(io, lobby);
-    if (!lobby.engine.manoTerminada) armarTimerJugada(io, lobby);
   });
   timer.iniciar();
   timers.set(lobby.id, timer);

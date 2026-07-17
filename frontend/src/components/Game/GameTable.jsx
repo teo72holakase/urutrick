@@ -9,13 +9,14 @@ import TurnTimer from "./TurnTimer";
 // actualiza estado cada segundo) y remonta TODO el árbol de cartas de cero,
 // repitiendo la animación de reparto una y otra vez. Sacarlas afuera evita eso.
 
-function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, jugarCarta, lobby, recogiendo }) {
+function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, jugarCarta, lobby, recogiendo, esModoEquipos }) {
   const esYo = !esEspectador && j.id === userId;
   const slots = estado.manos[j.id] || [];
   return (
     <div className={`asiento ${esYo ? "asiento-yo" : ""}`}>
       <div className="nombre-jugador">
-        <span className={j.equipo === "A" ? "chip-equipo-a" : "chip-equipo-b"}>{j.nombre}</span>
+        {esModoEquipos && <span className={`letra-equipo letra-${j.equipo.toLowerCase()}`}>{j.equipo}</span>}
+        <span>{j.nombre}</span>
         {lobby.jugadores[estado.manoIndex]?.id === j.id && <span className="icono-mano" title="Es mano">M</span>}
         {estado.turno === j.id && <span className="icono-turno" title="Turno">👉</span>}
       </div>
@@ -61,6 +62,7 @@ function CentroMesa({ estado, jugadores }) {
 export default function GameTable({ lobby, userId, esEspectador = false, estado, finPartida, onVolverMenu }) {
   const [recogiendo, setRecogiendo] = useState(false);
   const [cuentaMano, setCuentaMano] = useState(6);
+  const [mostrarHistorial, setMostrarHistorial] = useState(false);
   const manoIndexRef = useRef(null);
   const cuentaRef = useRef(null);
 
@@ -85,10 +87,13 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
   if (!estado) return <p style={{ textAlign: "center" }}>Repartiendo cartas...</p>;
 
   const jugadores = lobby.jugadores;
+  const esUno = lobby.modo === "1v1";
   const esMiTurno = !esEspectador && estado.turno === userId;
   const miEquipo = jugadores.find((j) => j.id === userId)?.equipo;
   const cantoPendiente = estado.estadoCanto && !estado.estadoCanto.respondido;
   const puedoResponderCanto = !esEspectador && cantoPendiente && estado.estadoCanto.equipoQueResponde === miEquipo;
+  const nombreEquipoA = esUno ? (jugadores.find((j) => j.equipo === "A")?.nombre || "Equipo A") : "Equipo A";
+  const nombreEquipoB = esUno ? (jugadores.find((j) => j.equipo === "B")?.nombre || "Equipo B") : "Equipo B";
 
   function jugarCarta(cartaId) {
     if (esEspectador) return;
@@ -112,14 +117,13 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
     return (
       <div className="panel" style={{ textAlign: "center" }}>
         <h2 className="titulo">¡Partida terminada!</h2>
-        <p>Ganó el equipo {finPartida.ganador} ({finPartida.puntos.A} - {finPartida.puntos.B})</p>
+        <p>Ganó {esUno ? (finPartida.ganador === "A" ? nombreEquipoA : nombreEquipoB) : `el equipo ${finPartida.ganador}`} ({finPartida.puntos.A} - {finPartida.puntos.B})</p>
         <button className="btn" onClick={onVolverMenu}>Volver al menú</button>
       </div>
     );
   }
 
-  const asientoProps = { estado, userId, esEspectador, esMiTurno, cantoPendiente, jugarCarta, lobby, recogiendo };
-  const esUno = lobby.modo === "1v1";
+  const asientoProps = { estado, userId, esEspectador, esMiTurno, cantoPendiente, jugarCarta, lobby, recogiendo, esModoEquipos: !esUno };
   let contenidoMesa;
   if (esUno && !esEspectador) {
     const rival = jugadores.find((j) => j.id !== userId);
@@ -140,14 +144,20 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
       </div>
     );
   } else {
+    // Mi equipo siempre abajo (cerca mío), el rival siempre arriba — igual para
+    // cualquier jugador, así ambos lados ven el mismo tipo de tablero (antes
+    // "Equipo B" quedaba fijo arriba para todos, y por eso un lado veía su
+    // propia fila de reversos distinto que el otro).
+    const abajo = esEspectador ? "A" : miEquipo;
+    const arriba = abajo === "A" ? "B" : "A";
     contenidoMesa = (
       <div className="mesa-equipos">
         <div className="fila-equipo">
-          {jugadores.filter((j) => j.equipo === "B").map((j) => <Asiento key={j.id} j={j} {...asientoProps} />)}
+          {jugadores.filter((j) => j.equipo === arriba).map((j) => <Asiento key={j.id} j={j} {...asientoProps} />)}
         </div>
         <CentroMesa estado={estado} jugadores={jugadores} />
         <div className="fila-equipo">
-          {jugadores.filter((j) => j.equipo === "A").map((j) => <Asiento key={j.id} j={j} {...asientoProps} />)}
+          {jugadores.filter((j) => j.equipo === abajo).map((j) => <Asiento key={j.id} j={j} {...asientoProps} />)}
         </div>
       </div>
     );
@@ -162,11 +172,31 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
         </div>
       )}
       <div className="marcador-fila">
-        <span className="marcador">Equipo A: {estado.puntos.A} pts</span>
+        <span className="marcador">{nombreEquipoA}: {estado.puntos.A} pts</span>
         <TurnTimer activo={esMiTurno && !cantoPendiente} segundos={20} resetKey={estado.turno} />
-        <span className="marcador">Equipo B: {estado.puntos.B} pts</span>
+        <span className="marcador">{nombreEquipoB}: {estado.puntos.B} pts</span>
       </div>
-      <p className="texto-suave" style={{ textAlign: "center", margin: "0 0 0.5rem" }}>Partida a {lobby.puntajeLimite || 30} tantos</p>
+      <p className="texto-suave" style={{ textAlign: "center", margin: "0 0 0.5rem" }}>
+        Partida a {lobby.puntajeLimite || 30} tantos
+        {estado.historialManos.length > 0 && (
+          <> · <button className="link-historial" onClick={() => setMostrarHistorial((v) => !v)}>
+            {mostrarHistorial ? "ocultar" : "ver"} historial de manos
+          </button></>
+        )}
+      </p>
+      {mostrarHistorial && (
+        <div className="panel historial-manos">
+          {estado.historialManos.slice().reverse().map((h) => (
+            <div key={h.numero} className="fila-historial">
+              Mano {h.numero}: ganó {esUno ? (h.ganador === "A" ? nombreEquipoA : nombreEquipoB) : `equipo ${h.ganador}`} (+{h.puntos})
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!esEspectador && estado.tengoFlor && (
+        <div className="banner-flor">🌸 ¡Tenés Flor! Podés cantarla cuando quieras antes de la primera baza.</div>
+      )}
 
       <div className="mesa">
         {estado.muestra && (
@@ -193,9 +223,13 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
       ) : (
         <div className="acciones-canto">
           <button className="btn" onClick={cantarTruco}>Truco</button>
-          <button className="btn" onClick={() => cantarEnvido("envido")}>Envido</button>
-          <button className="btn" onClick={() => cantarEnvido("real-envido")}>Real Envido</button>
-          <button className="btn" onClick={() => cantarEnvido("falta-envido")}>Falta Envido</button>
+          {!estado.envidoBloqueado && (
+            <>
+              <button className="btn" onClick={() => cantarEnvido("envido")}>Envido</button>
+              <button className="btn" onClick={() => cantarEnvido("real-envido")}>Real Envido</button>
+              <button className="btn" onClick={() => cantarEnvido("falta-envido")}>Falta Envido</button>
+            </>
+          )}
           {estado.tengoFlor && <button className="btn" onClick={() => cantarFlor("flor")}>🌸 Flor</button>}
           {estado.tengoFlor && <button className="btn" onClick={() => cantarFlor("contraflor")}>Contraflor</button>}
         </div>
@@ -203,7 +237,7 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
 
       {estado.manoTerminada && (
         <div className="panel" style={{ marginTop: "1rem", textAlign: "center" }}>
-          <p>Ganó la mano el equipo {estado.ganadorMano} — siguiente mano en {cuentaMano}s</p>
+          <p>Ganó la mano {esUno ? (estado.ganadorMano === "A" ? nombreEquipoA : nombreEquipoB) : `el equipo ${estado.ganadorMano}`} — siguiente mano en {cuentaMano}s</p>
         </div>
       )}
     </div>
