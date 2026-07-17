@@ -156,3 +156,65 @@ input, select {
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 .carta-jugada-anim { animation: jugarCarta 0.35s ease-out; }
+
+@keyframes recogerCartas {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.4) translateY(-20px); }
+}
+.fila-cartas.recogiendo .carta { animation: recogerCartas 0.45s ease-in forwards; }
+
+.diseño-taberna.carta-sprite { filter: sepia(0.35) saturate(1.2); }
+.diseño-minimal.carta-sprite { filter: grayscale(0.6) contrast(1.05); }
+
+.marcador { font-family: "Rye", cursive; color: var(--acento); font-size: 0.95rem; }
+.texto-suave { color: var(--texto-suave); }
+
+.muestra-zona {
+  position: absolute; top: 10px; left: 10px;
+  display: flex; align-items: center; z-index: 2;
+}
+.mazo-tapado {
+  width: 48px; height: 72px; border-radius: 6px;
+  background: repeating-linear-gradient(45deg, var(--acento-2), var(--acento-2) 6px, var(--madera-3) 6px, var(--madera-3) 12px);
+  border: 2px solid #222;
+  margin-right: -30px;
+  box-shadow: 2px 2px 6px var(--sombra);
+}
+.carta-muestra { transform: rotate(90deg) translate(2px, -2px); width: 48px; height: 72px; }
+
+.asientos-grid {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; padding-top: 3.5rem;
+}
+.asientos-1v1 {
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+  min-height: 55vh; padding: 3.5rem 0 1rem;
+}
+.asiento { text-align: center; }
+.nombre-jugador {
+  font-family: "Cabin", sans-serif; font-weight: 700; margin-bottom: 0.3rem;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+}
+.chip-equipo-a, .chip-equipo-b {
+  padding: 2px 10px; border-radius: 12px; font-size: 0.85rem;
+  border: 1px solid var(--madera-3);
+}
+.chip-equipo-a { background: rgba(212,169,78,0.25); }
+.chip-equipo-b { background: rgba(160,108,58,0.25); }
+.asiento-yo .nombre-jugador { color: var(--acento); }
+.fila-cartas { display: flex; gap: 0.3rem; justify-content: center; }
+.icono-turno { font-size: 0.9rem; }
+
+.centro-mesa {
+  display: flex; gap: 0.5rem; justify-content: center; align-items: center;
+  min-height: 100px;
+}
+
+@media (max-width: 600px) {
+  .carta { width: 46px; height: 70px; }
+  .mazo-tapado, .carta-muestra { width: 34px; height: 52px; }
+  .asientos-grid { gap: 0.5rem; padding-top: 3rem; }
+  .asientos-1v1 { min-height: 48vh; }
+  .nombre-jugador { font-size: 0.8rem; }
+  .chip-equipo-a, .chip-equipo-b { padding: 1px 6px; font-size: 0.75rem; }
+  .btn { padding: 0.5rem 0.8rem; font-size: 0.85rem; }
+}

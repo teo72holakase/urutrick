@@ -26,6 +26,7 @@ export class GameEngine {
     jugadores.forEach((j, i) => {
       this.manos[j.id] = mazo.slice(i * 3, i * 3 + 3);
     });
+    this.muestra = mazo[jugadores.length * 3] || mazo[0];
     this.turnoIndex = this.manoIndex;
     this.estadoCanto = null; // {tipo: 'truco'|'envido', nivel, equipoQueCanto, respondido}
     this.trucoNivel = 0; // 0=nada,1=truco,2=retruco,3=vale4
@@ -113,16 +114,19 @@ export class GameEngine {
 
   // --- Truco ---
   cantarTruco(jugadorId) {
+    if (this.estadoCanto && !this.estadoCanto.respondido) throw new Error("Hay un canto pendiente");
     const equipo = this.equipoDe(jugadorId);
     const niveles = ["truco", "retruco", "vale4"];
     if (this.trucoNivel >= 3) throw new Error("Ya está en vale4");
     this.trucoNivel += 1;
-    this.estadoCanto = { tipo: "truco", nivel: niveles[this.trucoNivel - 1], equipoQueCanto: equipo, respondido: false };
+    const equipoRival = equipo === "A" ? "B" : "A";
+    this.estadoCanto = { tipo: "truco", nivel: niveles[this.trucoNivel - 1], equipoQueCanto: equipo, equipoQueResponde: equipoRival, respondido: false };
     return this.estadoCanto;
   }
 
   responderTruco(jugadorId, quiero) {
     if (!this.estadoCanto || this.estadoCanto.tipo !== "truco") throw new Error("No hay truco pendiente");
+    if (this.equipoDe(jugadorId) === this.estadoCanto.equipoQueCanto) throw new Error("No podés responder tu propio canto");
     this.estadoCanto.respondido = true;
     if (!quiero) {
       const equipoRival = this.equipoDe(jugadorId) === "A" ? "B" : "A";
@@ -140,7 +144,8 @@ export class GameEngine {
     if (this.envidoResuelto) throw new Error("El envido ya se jugó esta mano");
     if (this.bazas.length > 0) throw new Error("El envido solo se canta antes de la primera baza");
     const equipo = this.equipoDe(jugadorId);
-    this.estadoCanto = { tipo: "envido", nivel: tipo, equipoQueCanto: equipo, respondido: false };
+    const equipoRival = equipo === "A" ? "B" : "A";
+    this.estadoCanto = { tipo: "envido", nivel: tipo, equipoQueCanto: equipo, equipoQueResponde: equipoRival, respondido: false };
     return this.estadoCanto;
   }
 
@@ -163,6 +168,7 @@ export class GameEngine {
 
   responderEnvido(jugadorId, quiero) {
     if (!this.estadoCanto || this.estadoCanto.tipo !== "envido") throw new Error("No hay envido pendiente");
+    if (this.equipoDe(jugadorId) === this.estadoCanto.equipoQueCanto) throw new Error("No podés responder tu propio canto");
     const equipoCanto = this.estadoCanto.equipoQueCanto;
     this.estadoCanto.respondido = true;
     this.envidoResuelto = true;
@@ -209,13 +215,15 @@ export class GameEngine {
     if (this.bazas.length > 0) throw new Error("La flor solo se canta antes de la primera baza");
     if (!this.tieneFlor(jugadorId)) throw new Error("No tenés flor");
     const equipo = this.equipoDe(jugadorId);
-    this.estadoCanto = { tipo: "flor", nivel: tipo, equipoQueCanto: equipo, respondido: false };
+    const equipoRival = equipo === "A" ? "B" : "A";
+    this.estadoCanto = { tipo: "flor", nivel: tipo, equipoQueCanto: equipo, equipoQueResponde: equipoRival, respondido: false };
     this.envidoResuelto = true; // cantar flor anula el envido de esa mano
     return this.estadoCanto;
   }
 
   responderFlor(jugadorId, quiero) {
     if (!this.estadoCanto || this.estadoCanto.tipo !== "flor") throw new Error("No hay flor pendiente");
+    if (this.equipoDe(jugadorId) === this.estadoCanto.equipoQueCanto) throw new Error("No podés responder tu propio canto");
     const equipoCanto = this.estadoCanto.equipoQueCanto;
     this.estadoCanto.respondido = true;
     this.florResuelta = true;
@@ -263,6 +271,7 @@ export class GameEngine {
     return {
       manoIndex: this.manoIndex,
       turno: this.jugadorActual().id,
+      muestra: this.muestra,
       cartasJugadas: this.cartasJugadas,
       puntos: this.puntos,
       trucoNivel: this.trucoNivel,
