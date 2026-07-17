@@ -35,6 +35,12 @@ function emitirEstado(io, lobby) {
     io.to(lobby.id).emit("fin-partida", { ganador, puntos: lobby.engine.puntos });
     timers.get(lobby.id)?.cancelar();
     guardarHistorial(lobby, ganador).catch((e) => console.error("No se pudo guardar historial:", e.message));
+    io.emit("lobby:actualizado", lobbyManager.listarPublicos());
+    // Si nadie sale explícitamente (cierran la pestaña), igual liberamos la mesa a los 5 min.
+    setTimeout(() => {
+      lobbyManager.eliminar(lobby.id);
+      io.emit("lobby:actualizado", lobbyManager.listarPublicos());
+    }, 5 * 60 * 1000);
   } else if (lobby.engine.manoTerminada) {
     programarSiguienteMano(io, lobby);
   }
@@ -132,6 +138,7 @@ export function registrarHandlers(io, socket) {
       emitirEstado(io, lobby);
       armarTimerJugada(io, lobby);
       cb({ ok: true });
+      io.emit("lobby:actualizado", lobbyManager.listarPublicos());
     } catch (e) { cb({ ok: false, error: e.message }); }
   });
 

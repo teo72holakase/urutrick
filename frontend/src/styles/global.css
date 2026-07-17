@@ -179,13 +179,16 @@ input, select {
 }
 .mazo-tapado {
   width: 42px; height: 65px; border-radius: 6px;
-  background-image: url(/cards/back.png);
+  background-image: url(/cards/back.PNG);
   background-size: cover;
   border: 1px solid rgba(0,0,0,0.4);
   margin-right: -22px;
   box-shadow: 2px 2px 6px var(--sombra);
 }
-.carta-muestra { width: 42px; height: 65px; }
+.carta-muestra { width: 42px; height: 65px; transform: rotate(90deg); transform-origin: center; margin-left: 14px; }
+
+/* Hueco invisible: ocupa el lugar de una carta ya jugada sin achicar la fila */
+.carta-hueco { width: 62px; height: 95.8px; }
 
 .mesa-1v1 {
   display: flex; flex-direction: column; justify-content: space-between;
@@ -221,10 +224,11 @@ input, select {
 }
 
 @media (max-width: 600px) {
-  .carta { width: 46px; height: 71.3px; }
-  .mazo-tapado, .carta-muestra { width: 32px; height: 49.5px; }
-  .mazo-tapado { margin-right: -16px; }
-  .mesa-1v1, .mesa-equipos { padding-top: 3rem; }
+  .carta, .carta-hueco { width: 46px; height: 71.3px; }
+  .mazo-tapado { width: 38px; height: 58.7px; margin-right: -18px; }
+  .carta-muestra { width: 38px; height: 58.7px; margin-left: 26px; }
+  .muestra-zona { top: 6px; left: 8px; }
+  .mesa-1v1, .mesa-equipos { padding-top: 3.2rem; }
   .mesa-1v1 { min-height: 48vh; }
   .mesa-equipos { min-height: 52vh; }
   .fila-equipo { gap: 0.6rem; }
@@ -238,6 +242,6 @@ input, select {
 }
 
 @media (max-width: 360px) {
-  .carta { width: 38px; height: 58.7px; }
+  .carta, .carta-hueco { width: 38px; height: 58.7px; }
   .btn { padding: 0.4rem 0.5rem; font-size: 0.72rem; }
 }

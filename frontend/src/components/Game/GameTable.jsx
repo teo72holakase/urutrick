@@ -3,13 +3,67 @@ import { socket } from "../../lib/socket";
 import PlayingCard from "./PlayingCard";
 import TurnTimer from "./TurnTimer";
 
+// IMPORTANTE: Asiento y CentroMesa van FUERA de GameTable (a nivel de módulo).
+// Si se declaran dentro del cuerpo de GameTable, React las trata como un tipo de
+// componente NUEVO en cada re-render (incluida la cuenta regresiva de 6s, que
+// actualiza estado cada segundo) y remonta TODO el árbol de cartas de cero,
+// repitiendo la animación de reparto una y otra vez. Sacarlas afuera evita eso.
+
+function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, jugarCarta, lobby, recogiendo }) {
+  const esYo = !esEspectador && j.id === userId;
+  const slots = estado.manos[j.id] || [];
+  return (
+    <div className={`asiento ${esYo ? "asiento-yo" : ""}`}>
+      <div className="nombre-jugador">
+        <span className={j.equipo === "A" ? "chip-equipo-a" : "chip-equipo-b"}>{j.nombre}</span>
+        {lobby.jugadores[estado.manoIndex]?.id === j.id && <span className="icono-mano" title="Es mano">M</span>}
+        {estado.turno === j.id && <span className="icono-turno" title="Turno">👉</span>}
+      </div>
+      <div className={`fila-cartas ${recogiendo ? "recogiendo" : ""}`}>
+        {slots.map((slot, i) => {
+          // slot = {jugada:true} -> hueco invisible (ya se jugó esa carta, no achica la fila)
+          if (slot && slot.jugada) {
+            return <div key={`hueco-${j.id}-${i}`} className="carta-hueco" />;
+          }
+          const carta = slot; // carta real, o null (oculta del rival)
+          return (
+            <div key={carta?.id || `${j.id}-${i}`} className="carta-repartida" style={{ animationDelay: `${i * 0.08}s` }}>
+              <PlayingCard
+                carta={carta}
+                tapada={!carta}
+                jugable={esYo && esMiTurno && !cantoPendiente && !!carta}
+                onClick={() => carta && jugarCarta(carta.id)}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CentroMesa({ estado, jugadores }) {
+  return (
+    <div className="centro-mesa">
+      {estado.cartasJugadas.map((cj, i) => {
+        const nombreJ = jugadores.find((j) => j.id === cj.jugadorId)?.nombre || "";
+        return (
+          <div key={`${cj.carta.id}-${i}`} className="carta-jugada-anim">
+            <PlayingCard carta={cj.carta} />
+            <div className="etiqueta-jugada">{nombreJ}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function GameTable({ lobby, userId, esEspectador = false, estado, finPartida, onVolverMenu }) {
   const [recogiendo, setRecogiendo] = useState(false);
   const [cuentaMano, setCuentaMano] = useState(6);
   const manoIndexRef = useRef(null);
   const cuentaRef = useRef(null);
 
-  // Animación de "recoger cartas" cuando cambia la mano.
   useEffect(() => {
     if (!estado) return;
     if (manoIndexRef.current !== null && manoIndexRef.current !== estado.manoIndex) {
@@ -19,7 +73,6 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
     manoIndexRef.current = estado.manoIndex;
   }, [estado?.manoIndex]);
 
-  // Cuenta regresiva visual de 6s cuando termina una mano (el backend avanza solo, esto es solo el indicador).
   useEffect(() => {
     clearInterval(cuentaRef.current);
     if (estado?.manoTerminada) {
@@ -65,45 +118,7 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
     );
   }
 
-  function Asiento({ j }) {
-    const esYo = !esEspectador && j.id === userId;
-    return (
-      <div className={`asiento ${esYo ? "asiento-yo" : ""}`}>
-        <div className="nombre-jugador">
-          <span className={j.equipo === "A" ? "chip-equipo-a" : "chip-equipo-b"}>{j.nombre}</span>
-          {lobby.jugadores[estado.manoIndex]?.id === j.id && <span className="icono-mano" title="Es mano">M</span>}
-          {estado.turno === j.id && <span className="icono-turno" title="Turno">👉</span>}
-        </div>
-        <div className={`fila-cartas ${recogiendo ? "recogiendo" : ""}`}>
-          {(estado.manos[j.id] || []).map((carta, i) => (
-            <div key={carta?.id || `${j.id}-${i}`} className="carta-repartida" style={{ animationDelay: `${i * 0.08}s` }}>
-              <PlayingCard
-                carta={carta}
-                tapada={!carta}
-                jugable={esYo && esMiTurno && !cantoPendiente && !!carta}
-                onClick={() => carta && jugarCarta(carta.id)}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  const CentroMesa = () => (
-    <div className="centro-mesa">
-      {estado.cartasJugadas.map((cj, i) => {
-        const nombreJ = jugadores.find((j) => j.id === cj.jugadorId)?.nombre || "";
-        return (
-          <div key={`${cj.carta.id}-${i}`} className="carta-jugada-anim">
-            <PlayingCard carta={cj.carta} />
-            <div className="etiqueta-jugada">{nombreJ}</div>
-          </div>
-        );
-      })}
-    </div>
-  );
-
+  const asientoProps = { estado, userId, esEspectador, esMiTurno, cantoPendiente, jugarCarta, lobby, recogiendo };
   const esUno = lobby.modo === "1v1";
   let contenidoMesa;
   if (esUno && !esEspectador) {
@@ -111,28 +126,28 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
     const yo = jugadores.find((j) => j.id === userId);
     contenidoMesa = (
       <div className="mesa-1v1">
-        {rival && <Asiento j={rival} />}
-        <CentroMesa />
-        {yo && <Asiento j={yo} />}
+        {rival && <Asiento j={rival} {...asientoProps} />}
+        <CentroMesa estado={estado} jugadores={jugadores} />
+        {yo && <Asiento j={yo} {...asientoProps} />}
       </div>
     );
   } else if (esUno && esEspectador) {
     contenidoMesa = (
       <div className="mesa-1v1">
-        <Asiento j={jugadores[1]} />
-        <CentroMesa />
-        <Asiento j={jugadores[0]} />
+        <Asiento j={jugadores[1]} {...asientoProps} />
+        <CentroMesa estado={estado} jugadores={jugadores} />
+        <Asiento j={jugadores[0]} {...asientoProps} />
       </div>
     );
   } else {
     contenidoMesa = (
       <div className="mesa-equipos">
         <div className="fila-equipo">
-          {jugadores.filter((j) => j.equipo === "B").map((j) => <Asiento key={j.id} j={j} />)}
+          {jugadores.filter((j) => j.equipo === "B").map((j) => <Asiento key={j.id} j={j} {...asientoProps} />)}
         </div>
-        <CentroMesa />
+        <CentroMesa estado={estado} jugadores={jugadores} />
         <div className="fila-equipo">
-          {jugadores.filter((j) => j.equipo === "A").map((j) => <Asiento key={j.id} j={j} />)}
+          {jugadores.filter((j) => j.equipo === "A").map((j) => <Asiento key={j.id} j={j} {...asientoProps} />)}
         </div>
       </div>
     );

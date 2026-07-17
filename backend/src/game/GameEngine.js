@@ -282,7 +282,12 @@ export class GameEngine {
       manos: Object.fromEntries(
         jugadores.map((j) => {
           const mostrar = esEspectador || j.id === paraJugadorId || (verCartasCompanero && j.equipo === equipoPropio);
-          return [j.id, mostrar ? this.manos[j.id] : this.manos[j.id].map(() => null)];
+          const restantes = this.manos[j.id];
+          const yaJugadas = 3 - restantes.length; // slots ya jugados en esta mano
+          const slots = [];
+          for (let i = 0; i < yaJugadas; i++) slots.push({ jugada: true }); // hueco, no ocupa lugar visual
+          for (const c of restantes) slots.push(mostrar ? c : null);
+          return [j.id, slots];
         })
       ),
     };

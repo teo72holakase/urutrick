@@ -82,6 +82,10 @@ export class LobbyManager {
     return this.lobbies.get(lobbyId);
   }
 
+  eliminar(lobbyId) {
+    this.lobbies.delete(lobbyId);
+  }
+
   esJugador(lobbyId, userId) {
     const lobby = this.lobbies.get(lobbyId);
     return !!lobby?.jugadores.some((j) => j.id === userId);

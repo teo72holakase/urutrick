@@ -7,11 +7,11 @@
 //   /cards/back.png   (reverso, el archivo #41)
 export default function PlayingCard({ carta, tapada, jugable, onClick, className = "" }) {
   if (tapada || !carta) {
-    return <img src="/cards/back.png" className={`carta ${className}`} alt="" draggable={false} />;
+    return <img src="/cards/back.PNG" className={`carta ${className}`} alt="" draggable={false} />;
   }
   return (
     <img
-      src={`/cards/${carta.palo}-${carta.numero}.png`}
+      src={`/cards/${carta.palo}-${carta.numero}.PNG`}
       className={`carta ${jugable ? "jugable" : ""} ${className}`}
       onClick={jugable ? onClick : undefined}
       alt={`${carta.numero} de ${carta.palo}`}
