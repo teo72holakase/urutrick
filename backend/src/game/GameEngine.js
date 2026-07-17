@@ -10,6 +10,7 @@ export class GameEngine {
     this.puntajeLimite = lobby.puntajeLimite || 30;
     this.puntos = { A: 0, B: 0 };
     this.manoIndex = 0; // índice del jugador mano
+    this.historialManos = []; // [{numero, ganador, puntos, motivo}] — persiste entre manos, no se resetea
     this.reset();
   }
 
@@ -109,6 +110,7 @@ export class GameEngine {
       this.ganadorMano = ganador;
       const puntos = this.trucoNivel > 0 ? PUNTOS_TRUCO[["truco", "retruco", "vale4"][this.trucoNivel - 1]] : 1;
       this.puntos[ganador] += puntos;
+      this.historialManos.push({ numero: this.historialManos.length + 1, ganador, puntos, motivo: "bazas" });
     }
   }
 
@@ -134,15 +136,22 @@ export class GameEngine {
       this.puntos[equipoRival] += puntosPrevios;
       this.manoTerminada = true;
       this.ganadorMano = equipoRival;
+      this.historialManos.push({ numero: this.historialManos.length + 1, ganador: equipoRival, puntos: puntosPrevios, motivo: "no-quiero" });
     }
     this.estadoCanto = null;
     return { quiero };
   }
 
   // --- Envido (simplificado: envido / real-envido / falta-envido) ---
+  algunTieneFlorSinResolver() {
+    if (this.florResuelta || this.bazas.length > 0) return false;
+    return this.jugadoresOrdenados().some((j) => this.tieneFlor(j.id));
+  }
+
   cantarEnvido(jugadorId, tipo) {
     if (this.envidoResuelto) throw new Error("El envido ya se jugó esta mano");
     if (this.bazas.length > 0) throw new Error("El envido solo se canta antes de la primera baza");
+    if (this.algunTieneFlorSinResolver()) throw new Error("Hay flor en la mesa: hay que cantarla antes que el envido");
     const equipo = this.equipoDe(jugadorId);
     const equipoRival = equipo === "A" ? "B" : "A";
     this.estadoCanto = { tipo: "envido", nivel: tipo, equipoQueCanto: equipo, equipoQueResponde: equipoRival, respondido: false };
@@ -278,6 +287,8 @@ export class GameEngine {
       estadoCanto: this.estadoCanto,
       manoTerminada: this.manoTerminada,
       ganadorMano: this.ganadorMano,
+      historialManos: this.historialManos,
+      envidoBloqueado: this.envidoResuelto || this.algunTieneFlorSinResolver(),
       tengoFlor: !esEspectador && this.bazas.length === 0 && !this.florResuelta && this.tieneFlor(paraJugadorId),
       manos: Object.fromEntries(
         jugadores.map((j) => {

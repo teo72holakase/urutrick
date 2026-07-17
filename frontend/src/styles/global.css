@@ -205,13 +205,29 @@ input, select {
   font-family: "Cabin", sans-serif; font-weight: 700; margin-bottom: 0.3rem;
   display: flex; align-items: center; justify-content: center; gap: 4px;
 }
-.chip-equipo-a, .chip-equipo-b {
-  padding: 2px 10px; border-radius: 12px; font-size: 0.85rem;
-  border: 1px solid var(--madera-3);
+.letra-equipo {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 4px; font-size: 0.7rem; font-weight: 900;
+  color: #2b1c12;
 }
-.chip-equipo-a { background: rgba(212,169,78,0.25); }
-.chip-equipo-b { background: rgba(160,108,58,0.25); }
+.letra-equipo.letra-a { background: var(--acento); }
+.letra-equipo.letra-b { background: var(--acento-2); }
 .asiento-yo .nombre-jugador { color: var(--acento); }
+
+.banner-flor {
+  background: linear-gradient(180deg, var(--acento) 0%, var(--acento-2) 100%);
+  color: #2b1c12; font-weight: 700; text-align: center;
+  padding: 0.5rem 1rem; border-radius: 8px; margin-bottom: 0.5rem;
+  border: 2px solid var(--madera-3);
+}
+
+.link-historial {
+  background: none; border: none; color: var(--acento); text-decoration: underline;
+  cursor: pointer; font-family: inherit; font-size: inherit; padding: 0;
+}
+.historial-manos { padding: 0.75rem 1rem; margin-bottom: 0.5rem; max-height: 160px; overflow-y: auto; }
+.fila-historial { padding: 0.2rem 0; border-bottom: 1px solid var(--madera-3); font-size: 0.85rem; }
+.fila-historial:last-child { border-bottom: none; }
 .fila-cartas { display: flex; gap: 0.3rem; justify-content: center; }
 .icono-turno { font-size: 0.9rem; }
 
@@ -233,7 +249,7 @@ input, select {
   .mesa-equipos { min-height: 52vh; }
   .fila-equipo { gap: 0.6rem; }
   .nombre-jugador { font-size: 0.78rem; }
-  .chip-equipo-a, .chip-equipo-b { padding: 1px 6px; font-size: 0.72rem; }
+  .letra-equipo { width: 15px; height: 15px; font-size: 0.62rem; }
   .btn { padding: 0.45rem 0.65rem; font-size: 0.78rem; }
   .acciones-canto .btn { flex: 1 1 auto; min-width: 0; }
   .etiqueta-jugada { font-size: 0.6rem; }
