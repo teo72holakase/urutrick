@@ -12,6 +12,7 @@ export class GameEngine {
     this.puntos = { A: 0, B: 0 };
     this.manoIndex = 0;
     this.historialManos = [];
+    this.revelacionSeq = 0;
     this.reset();
   }
 
@@ -33,8 +34,15 @@ export class GameEngine {
     this.trucoPalabra = this.equipoDe(jugadores[this.manoIndex].id); // quién puede cantar/subir el truco
     this.envidoResuelto = false;
     this.florResuelta = false;
+    this.revelacionEnvido = null; // sub-estado FASE_ENVIDO: canto de tantos en curso
     this.manoTerminada = false;
     this.ganadorMano = null;
+  }
+
+  // Un jugador "ya jugó" si tiene una carta en la baza en curso o en una resuelta.
+  haJugadoCarta(jugadorId) {
+    return this.cartasJugadas.some((c) => c.jugadorId === jugadorId)
+      || this.bazas.some((b) => (b.jugadas || []).some((j) => j.jugadorId === jugadorId));
   }
 
   jugadorActual() { return this.jugadoresOrdenados()[this.turnoIndex]; }
@@ -57,6 +65,7 @@ export class GameEngine {
 
   // --- Jugar carta ---
   jugarCarta(jugadorId, cartaId) {
+    if (this.revelacionEnvido) throw new Error("Fase de envido en curso");
     if (this.jugadorActual().id !== jugadorId) throw new Error("No es tu turno");
     if (this.estadoCanto && !this.estadoCanto.respondido) throw new Error("Hay un canto pendiente");
     if (this.bazaPendiente) throw new Error("Esperando que se resuelva la baza");
@@ -89,6 +98,7 @@ export class GameEngine {
   }
 
   irseAlMazo(jugadorId) {
+    if (this.revelacionEnvido) throw new Error("Fase de envido en curso");
     if (this.manoTerminada) throw new Error("La mano ya terminó");
     if (this.bazaPendiente) throw new Error("Esperando que se resuelva la baza");
     const equipo = this.equipoDe(jugadorId);
@@ -139,6 +149,7 @@ export class GameEngine {
 
   // --- Truco: respeta la "palabra" (quién puede cantar/subir) ---
   cantarTruco(jugadorId) {
+    if (this.revelacionEnvido) throw new Error("Fase de envido en curso");
     if (this.estadoCanto && !this.estadoCanto.respondido) throw new Error("Hay un canto pendiente");
     if (this.bazaPendiente) throw new Error("Esperando que se resuelva la baza");
     if (this.trucoNivel >= 3) throw new Error("Ya está en vale4");
@@ -174,12 +185,15 @@ export class GameEngine {
     return this.jugadoresOrdenados().some((j) => this.tieneFlor(j.id));
   }
 
-  envidoDisponible() {
-    // Se puede cantar durante toda la primera ronda (primera baza), sin importar
-    // cuántas cartas ya se jugaron en ella. Deja de estar disponible recién en
-    // la 2da ronda (this.bazas.length > 0), si ya se resolvió (jugado o con
-    // flor de por medio) o si hay una flor sin resolver todavía.
-    return !this.envidoResuelto && this.bazas.length === 0 && !this.bazaPendiente && !this.algunTieneFlorSinResolver();
+  envidoDisponible(jugadorId) {
+    // Se puede cantar durante la primera ronda (primera baza) SOLO si quien canta
+    // no jugó todavía ninguna carta. Deja de estar disponible en la 2da ronda
+    // (this.bazas.length > 0), si ya se resolvió, si hay revelación en curso o si
+    // hay una flor sin resolver todavía.
+    if (this.envidoResuelto || this.bazas.length !== 0 || this.bazaPendiente || this.revelacionEnvido) return false;
+    if (this.algunTieneFlorSinResolver()) return false;
+    if (jugadorId && this.haJugadoCarta(jugadorId)) return false;
+    return true;
   }
 
   // Qué cantos de envido se pueden encadenar a partir de la cadena actual.
@@ -216,7 +230,8 @@ export class GameEngine {
       ec.siguientes = this.siguientesEnvidoValidos(ec.cadena);
       return ec;
     }
-    if (!this.envidoDisponible()) throw new Error("Ya no se puede cantar envido en esta mano");
+    if (this.haJugadoCarta(jugadorId)) throw new Error("No podés cantar envido: ya jugaste una carta en la ronda");
+    if (!this.envidoDisponible(jugadorId)) throw new Error("Ya no se puede cantar envido en esta mano");
     const cadena = [tipo];
     this.estadoCanto = {
       tipo: "envido",
@@ -302,7 +317,39 @@ export class GameEngine {
     else puntos = ec.acumuladoQuerido;
     this.registrarPuntos(ganador, puntos, ec.nivel.replace(/-/g, " "));
     this.estadoCanto = null;
+    // FASE_ENVIDO: se entra en la revelación (canto de tantos secuencial) que
+    // bloquea el juego hasta que el servidor la cierra.
+    this.revelacionEnvido = { id: ++this.revelacionSeq, orden: this.secuenciaCantoEnvido(), ganador, puntos };
     return { quiero, ganador, mejorA, mejorB };
+  }
+
+  // Orden en que los jugadores "cantan" sus tantos, empezando por el mano y
+  // girando alrededor de la mesa. Cada jugador dice su número si supera al mayor
+  // dicho hasta el momento; si no puede superarlo dice "Son buenas" (sin revelar
+  // su número); y si un compañero suyo ya va ganando, ni habla.
+  secuenciaCantoEnvido() {
+    const jugadores = this.jugadoresOrdenados();
+    const n = jugadores.length;
+    const orden = [];
+    let maxDicho = -1;
+    let equipoLider = null;
+    for (let k = 0; k < n; k++) {
+      const j = jugadores[(this.manoIndex + k) % n];
+      const val = this.calcularEnvidoJugador(j.id);
+      if (equipoLider && j.equipo === equipoLider) continue; // compañero del líder: calla
+      if (val > maxDicho) {
+        orden.push({ jugadorId: j.id, equipo: j.equipo, texto: String(val), puntos: val });
+        maxDicho = val;
+        equipoLider = j.equipo;
+      } else {
+        orden.push({ jugadorId: j.id, equipo: j.equipo, texto: "Son buenas", puntos: null });
+      }
+    }
+    return orden;
+  }
+
+  finalizarRevelacionEnvido() {
+    this.revelacionEnvido = null;
   }
 
   // --- Flor ---
@@ -424,10 +471,11 @@ export class GameEngine {
       trucoNivel: this.trucoNivel,
       trucoPalabra: this.trucoPalabra,
       estadoCanto: this.estadoCanto,
+      revelacionEnvido: this.revelacionEnvido,
       manoTerminada: this.manoTerminada,
       ganadorMano: this.ganadorMano,
       historialManos: this.historialManos,
-      envidoDisponible: !esEspectador && this.envidoDisponible(),
+      envidoDisponible: !esEspectador && this.envidoDisponible(paraJugadorId),
       tengoFlor: !esEspectador && this.bazas.length === 0 && !this.bazaPendiente && !this.florResuelta && this.tieneFlor(paraJugadorId),
       manos: Object.fromEntries(
         jugadores.map((j) => {

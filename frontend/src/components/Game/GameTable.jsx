@@ -27,11 +27,16 @@ function distribuirAsientos(jugadores, userId, modo, esEspectador) {
   return { top: [comp[0], rivales[0], comp[1]], bottom: [rivales[1], me, rivales[2]] };
 }
 
-function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, jugarCarta, lobby, recogiendo, esModoEquipos }) {
+function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, jugarCarta, lobby, recogiendo, esModoEquipos, bloqueado, cantoPunto }) {
   const esYo = !esEspectador && j.id === userId;
   const slots = estado.manos[j.id] || [];
   return (
     <div className={`asiento ${esYo ? "asiento-yo" : ""}`}>
+      {cantoPunto && (
+        <div className={`burbuja-envido burbuja-${j.equipo?.toLowerCase() || "a"} ${cantoPunto === "Son buenas" ? "burbuja-buenas" : ""}`}>
+          {cantoPunto}
+        </div>
+      )}
       <div className="nombre-jugador">
         {esModoEquipos && <span className={`letra-equipo letra-${j.equipo.toLowerCase()}`}>{j.equipo}</span>}
         <span>{j.nombre}</span>
@@ -44,7 +49,7 @@ function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, j
           const carta = slot;
           return (
             <div key={carta?.id || `${j.id}-${i}`} className="carta-repartida" style={{ animationDelay: `${i * 0.08}s` }}>
-              <PlayingCard carta={carta} tapada={!carta} jugable={esYo && esMiTurno && !cantoPendiente && !!carta} onClick={() => carta && jugarCarta(carta.id)} />
+              <PlayingCard carta={carta} tapada={!carta} jugable={esYo && esMiTurno && !cantoPendiente && !bloqueado && !!carta} onClick={() => carta && jugarCarta(carta.id)} />
             </div>
           );
         })}
@@ -136,8 +141,24 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
   const [recogiendo, setRecogiendo] = useState(false);
   const [cuentaMano, setCuentaMano] = useState(6);
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
+  const [revelCount, setRevelCount] = useState(0);
   const manoIndexRef = useRef(null);
   const cuentaRef = useRef(null);
+
+  // Canto de tantos: cada jugador de la secuencia "habla" una burbuja cada 2s.
+  const revel = estado?.revelacionEnvido || null;
+  useEffect(() => {
+    if (!revel) { setRevelCount(0); return; }
+    const total = (revel.orden || []).length;
+    let i = 1;
+    setRevelCount(1);
+    const int = setInterval(() => {
+      i += 1;
+      setRevelCount(i);
+      if (i >= total) clearInterval(int);
+    }, 2000);
+    return () => clearInterval(int);
+  }, [revel?.id]);
 
   useEffect(() => {
     if (!estado) return;
@@ -161,7 +182,24 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
 
   const jugadores = lobby.jugadores;
   const esUno = lobby.modo === "1v1";
-  const esMiTurno = !esEspectador && estado.turno === userId && !estado.bazaPendiente;
+  const enRevelacion = !!estado.revelacionEnvido;
+  const esMiTurno = !esEspectador && estado.turno === userId && !estado.bazaPendiente && !enRevelacion;
+
+  // Texto de la burbuja de tantos que corresponde a un jugador en este instante.
+  // Aparecen en orden (revelCount) y cada una queda hasta que aparezca un puntaje
+  // mayor posterior; "Son buenas" no revela número y se va apenas hay uno mayor.
+  function cantoDeEnvido(jugadorId) {
+    if (!enRevelacion) return null;
+    const orden = estado.revelacionEnvido.orden || [];
+    const idx = orden.findIndex((o) => o.jugadorId === jugadorId);
+    if (idx === -1 || idx >= revelCount) return null;
+    const pts = orden[idx].puntos == null ? -1 : orden[idx].puntos;
+    for (let k = idx + 1; k < Math.min(revelCount, orden.length); k++) {
+      const p = orden[k].puntos == null ? -1 : orden[k].puntos;
+      if (p > pts) return null;
+    }
+    return orden[idx].texto;
+  }
   const miEquipo = jugadores.find((j) => j.id === userId)?.equipo || "A";
   const cantoPendiente = estado.estadoCanto && !estado.estadoCanto.respondido;
   const puedoResponderCanto = !esEspectador && cantoPendiente && estado.estadoCanto.equipoQueResponde === miEquipo;
@@ -197,7 +235,7 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
     );
   }
 
-  const asientoProps = { estado, userId, esEspectador, esMiTurno, cantoPendiente, jugarCarta, lobby, recogiendo, esModoEquipos: !esUno };
+  const asientoProps = { estado, userId, esEspectador, esMiTurno, cantoPendiente, jugarCarta, lobby, recogiendo, esModoEquipos: !esUno, bloqueado: enRevelacion };
   let contenidoMesa;
   if (esUno && !esEspectador) {
     const rival = jugadores.find((j) => j.id !== userId);
@@ -206,13 +244,13 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
     const cjMia = estado.cartasJugadas.find((cj) => cj.jugadorId === yo?.id);
     contenidoMesa = (
       <div className="mesa-1v1">
-        {rival && <Asiento j={rival} {...asientoProps} />}
+        {rival && <Asiento j={rival} {...asientoProps} cantoPunto={cantoDeEnvido(rival.id)} />}
         <div className="centro-mesa-vertical">
           <CartaCentral cj={cjRival} jugadores={jugadores} />
           <MuestraCentral muestra={estado.muestra} />
           <CartaCentral cj={cjMia} jugadores={jugadores} />
         </div>
-        {yo && <Asiento j={yo} {...asientoProps} />}
+        {yo && <Asiento j={yo} {...asientoProps} cantoPunto={cantoDeEnvido(yo.id)} />}
       </div>
     );
   } else if (esUno && esEspectador) {
@@ -221,13 +259,13 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
     const cj1 = estado.cartasJugadas.find((cj) => cj.jugadorId === j1?.id);
     contenidoMesa = (
       <div className="mesa-1v1">
-        <Asiento j={j1} {...asientoProps} />
+        <Asiento j={j1} {...asientoProps} cantoPunto={cantoDeEnvido(j1?.id)} />
         <div className="centro-mesa-vertical">
           <CartaCentral cj={cj1} jugadores={jugadores} />
           <MuestraCentral muestra={estado.muestra} />
           <CartaCentral cj={cj0} jugadores={jugadores} />
         </div>
-        <Asiento j={j0} {...asientoProps} />
+        <Asiento j={j0} {...asientoProps} cantoPunto={cantoDeEnvido(j0?.id)} />
       </div>
     );
   } else {
@@ -239,7 +277,7 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
     contenidoMesa = (
       <div className={`mesa-matriz matriz-${lobby.modo}`}>
         <div className="fila-jugadores">
-          {top.map((j) => <Asiento key={j.id} j={j} {...asientoProps} />)}
+          {top.map((j) => <Asiento key={j.id} j={j} {...asientoProps} cantoPunto={cantoDeEnvido(j.id)} />)}
         </div>
         <div className="fila-frente">
           {top.map((j) => <CartaFrente key={j.id} cj={cartaDe(j.id)} />)}
@@ -249,7 +287,7 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
           {bottom.map((j) => <CartaFrente key={j.id} cj={cartaDe(j.id)} />)}
         </div>
         <div className="fila-jugadores">
-          {bottom.map((j) => <Asiento key={j.id} j={j} {...asientoProps} />)}
+          {bottom.map((j) => <Asiento key={j.id} j={j} {...asientoProps} cantoPunto={cantoDeEnvido(j.id)} />)}
         </div>
       </div>
     );
@@ -296,7 +334,13 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
         <HistorialBazas estado={estado} jugadores={jugadores} esUno={esUno} />
       </div>
 
-      {!esEspectador && (cantoPendiente ? (
+      {enRevelacion && (
+        <div className="panel panel-canto-tantos" style={{ marginTop: "1rem", textAlign: "center" }}>
+          <p>🗣️ Cantando los tantos…</p>
+        </div>
+      )}
+
+      {!esEspectador && !enRevelacion && (cantoPendiente ? (
         <div className="panel" style={{ marginTop: "1rem", textAlign: "center" }}>
           <p>Canto: <b>{nombreCanto(estado.estadoCanto.nivel)}</b> ({estado.estadoCanto.tipo})</p>
           {puedoResponderCanto ? (

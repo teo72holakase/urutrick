@@ -6,9 +6,11 @@ const lobbyManager = new LobbyManager();
 const timers = new Map(); // lobbyId -> TurnTimer
 const sigManoTimers = new Map(); // lobbyId -> setTimeout handle
 const bazaTimers = new Map(); // lobbyId -> setTimeout handle (delay antes de recoger la baza)
+const revelTimers = new Map(); // lobbyId -> setTimeout handle (fin de la revelación de envido)
 const conexiones = new Map(); // userId -> socket.id actual
 
 const DELAY_RESOLVER_BAZA = 1100; // ms que quedan las cartas jugadas visibles en el centro de la mesa
+const DELAY_CANTO_ENVIDO = 2000; // ms entre cada "canto de tantos" sobre la cabeza de cada jugador
 
 function emitirA(io, userId, evento, payload) {
   const sid = conexiones.get(userId);
@@ -48,6 +50,27 @@ function programarResolucionBaza(io, lobby) {
     }
   }, DELAY_RESOLVER_BAZA);
   bazaTimers.set(lobby.id, handle);
+}
+
+// Tras un "quiero" de envido se entra en FASE_ENVIDO: se van cantando los tantos
+// (una burbuja cada DELAY_CANTO_ENVIDO ms en el cliente) y el juego queda pausado
+// hasta que se cierra la revelación y se retoma el turno normal.
+function programarFinRevelacionEnvido(io, lobby) {
+  if (revelTimers.has(lobby.id)) return;
+  const cantidad = lobby.engine.revelacionEnvido?.orden?.length || 1;
+  const dur = cantidad * DELAY_CANTO_ENVIDO + 1200;
+  const handle = setTimeout(() => {
+    revelTimers.delete(lobby.id);
+    try {
+      if (!lobby.engine) return;
+      lobby.engine.finalizarRevelacionEnvido();
+      emitirEstado(io, lobby);
+      if (!lobby.engine.manoTerminada) armarTimerJugada(io, lobby);
+    } catch (e) {
+      console.error(`Error al cerrar revelación de envido de mesa ${lobby.id}:`, e);
+    }
+  }, dur);
+  revelTimers.set(lobby.id, handle);
 }
 
 function emitirEstado(io, lobby) {
@@ -231,7 +254,12 @@ export function registrarHandlers(io, socket) {
       const lobby = lobbyManager.get(lobbyId);
       lobby.engine.responderEnvido(userId, quiero);
       emitirEstado(io, lobby);
-      armarTimerJugada(io, lobby);
+      if (lobby.engine.revelacionEnvido) {
+        timers.get(lobby.id)?.cancelar();
+        programarFinRevelacionEnvido(io, lobby);
+      } else {
+        armarTimerJugada(io, lobby);
+      }
       cb?.({ ok: true });
     } catch (e) { cb?.({ ok: false, error: e.message }); }
   });

@@ -238,7 +238,28 @@ input, select {
 .centro-mesa-vertical .muestra-central { justify-content: center; padding-left: 0; position: relative; left: -25%; }
 .matriz-2v2 .fila-jugadores, .matriz-2v2 .fila-frente { justify-content: space-between; padding: 0 6%; }
 
-.asiento { text-align: center; }
+.asiento { text-align: center; position: relative; }
+.burbuja-envido {
+  position: absolute; left: 50%; top: -34px; transform: translateX(-50%);
+  z-index: 40; white-space: nowrap;
+  font-family: "Cabin", sans-serif; font-weight: 800; font-size: 0.9rem;
+  color: #2b1c12; padding: 0.2rem 0.6rem; border-radius: 12px;
+  border: 2px solid var(--madera-3); box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+  background: linear-gradient(180deg, #fff 0%, #f1dfb6 100%);
+  animation: aparecer-burbuja 0.25s ease-out;
+}
+.burbuja-envido::after {
+  content: ""; position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%);
+  border-left: 6px solid transparent; border-right: 6px solid transparent;
+  border-top: 7px solid #f1dfb6;
+}
+.burbuja-envido.burbuja-buenas { background: linear-gradient(180deg, #e8e8e8 0%, #c9c3b4 100%); color: #3a3a3a; font-weight: 700; }
+.burbuja-envido.burbuja-buenas::after { border-top-color: #c9c3b4; }
+@keyframes aparecer-burbuja {
+  from { opacity: 0; transform: translate(-50%, 8px) scale(0.85); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+.panel-canto-tantos { color: var(--acento); font-weight: 700; }
 .nombre-jugador {
   font-family: "Cabin", sans-serif; font-weight: 700; margin-bottom: 0.3rem;
   display: flex; align-items: center; justify-content: center; gap: 4px;
