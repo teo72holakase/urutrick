@@ -6,6 +6,15 @@ export default function LobbyBrowser({ nombreJugador, onEntrarLobby, onEspectar 
   const [lobbies, setLobbies] = useState([]);
   const [mostrarCrear, setMostrarCrear] = useState(false);
   const [error, setError] = useState("");
+  const [refrescando, setRefrescando] = useState(false);
+
+  function refrescar() {
+    setRefrescando(true);
+    socket.emit("lobby:listar", (lista) => {
+      setLobbies(lista);
+      setRefrescando(false);
+    });
+  }
 
   useEffect(() => {
     socket.emit("lobby:listar", setLobbies);
@@ -32,7 +41,12 @@ export default function LobbyBrowser({ nombreJugador, onEntrarLobby, onEspectar 
     <div className="panel">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h2 className="titulo">Mesas disponibles</h2>
-        <button className="btn" onClick={() => setMostrarCrear(true)}>+ Crear mesa</button>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <button className="btn btn-secundario" onClick={refrescar} disabled={refrescando}>
+            {refrescando ? "Actualizando…" : "↻ Refrescar"}
+          </button>
+          <button className="btn" onClick={() => setMostrarCrear(true)}>+ Crear mesa</button>
+        </div>
       </div>
       {error && <p style={{ color: "#e57373" }}>{error}</p>}
       {lobbies.length === 0 && <p>No hay mesas abiertas. ¡Creá una!</p>}

@@ -172,6 +172,23 @@ input, select {
   flex-wrap: wrap; justify-content: center;
 }
 
+/* Mensajes siempre arriba de la mesa */
+.mensajes-arriba { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.5rem; }
+.banner-canto {
+  background: var(--panel); border: 2px solid var(--madera-3);
+  color: var(--texto); text-align: center; padding: 0.45rem 1rem; border-radius: 8px;
+}
+
+/* Controles a la izquierda, mesa a la derecha */
+.mesa-y-controles { display: flex; align-items: flex-start; gap: 0.6rem; }
+.mesa-y-controles .mesa-wrap { flex: 1; min-width: 0; }
+.controles-izquierda {
+  flex: 0 0 132px; display: flex; flex-direction: column; gap: 0.5rem;
+  position: sticky; top: 0.5rem;
+}
+.controles-izquierda:empty { display: none; }
+.controles-izquierda .btn { width: 100%; padding: 0.55rem 0.6rem; }
+
 .marcador-fila {
   display: flex; justify-content: space-between; align-items: center;
   gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.25rem;
@@ -312,6 +329,17 @@ input, select {
 }
 .etiqueta-jugada {
   font-size: 0.7rem; text-align: center; color: var(--texto-suave); margin-top: 2px;
+}
+
+/* En pantallas angostas los controles pasan a una fila debajo de la mesa */
+@media (max-width: 760px) {
+  .mesa-y-controles { flex-direction: column; }
+  .controles-izquierda {
+    flex: 1 1 auto; width: 100%; flex-direction: row; flex-wrap: wrap;
+    justify-content: center; position: static; order: 2;
+  }
+  .controles-izquierda .btn { width: auto; flex: 1 1 auto; min-width: 40%; }
+  .mesa-y-controles .mesa-wrap { order: 1; width: 100%; }
 }
 
 @media (max-width: 600px) {

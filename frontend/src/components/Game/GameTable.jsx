@@ -142,8 +142,29 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
   const [cuentaMano, setCuentaMano] = useState(6);
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
   const [revelCount, setRevelCount] = useState(0);
+  const [accion, setAccion] = useState(null); // burbuja de acción sobre un jugador
+  const [aviso, setAviso] = useState(null); // mensaje temporal arriba
   const manoIndexRef = useRef(null);
   const cuentaRef = useRef(null);
+
+  // Burbuja de acción ("Quiero", "Truco", "Me voy al mazo", "Flor"...) visible
+  // para todos durante ~3s sobre la cabeza del jugador que la emitió.
+  const accionSrc = estado?.accionReciente || null;
+  useEffect(() => {
+    if (!accionSrc) return;
+    setAccion(accionSrc);
+    const t = setTimeout(() => setAccion((a) => (a?.id === accionSrc.id ? null : a)), 3000);
+    return () => clearTimeout(t);
+  }, [accionSrc?.id]);
+
+  // Mensaje temporal arriba (ej: "+3 de flor para X") durante ~3s.
+  const avisoSrc = estado?.avisoTop || null;
+  useEffect(() => {
+    if (!avisoSrc) return;
+    setAviso(avisoSrc);
+    const t = setTimeout(() => setAviso((a) => (a?.id === avisoSrc.id ? null : a)), 3000);
+    return () => clearTimeout(t);
+  }, [avisoSrc?.id]);
 
   // Canto de tantos: cada jugador de la secuencia "habla" una burbuja cada 2s.
   const revel = estado?.revelacionEnvido || null;
@@ -200,6 +221,11 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
     }
     return orden[idx].texto;
   }
+  // Burbuja a mostrar sobre un jugador: prioridad al canto de tantos (revelación);
+  // si no, la acción reciente que emitió ese jugador.
+  function burbujaDe(jugadorId) {
+    return cantoDeEnvido(jugadorId) || (accion && accion.jugadorId === jugadorId ? accion.texto : null);
+  }
   const miEquipo = jugadores.find((j) => j.id === userId)?.equipo || "A";
   const cantoPendiente = estado.estadoCanto && !estado.estadoCanto.respondido;
   const puedoResponderCanto = !esEspectador && cantoPendiente && estado.estadoCanto.equipoQueResponde === miEquipo;
@@ -246,13 +272,13 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
     const cjMia = estado.cartasJugadas.find((cj) => cj.jugadorId === yo?.id);
     contenidoMesa = (
       <div className="mesa-1v1">
-        {rival && <Asiento j={rival} {...asientoProps} cantoPunto={cantoDeEnvido(rival.id)} />}
+        {rival && <Asiento j={rival} {...asientoProps} cantoPunto={burbujaDe(rival.id)} />}
         <div className="centro-mesa-vertical">
           <CartaCentral cj={cjRival} jugadores={jugadores} />
           <MuestraCentral muestra={estado.muestra} />
           <CartaCentral cj={cjMia} jugadores={jugadores} />
         </div>
-        {yo && <Asiento j={yo} {...asientoProps} cantoPunto={cantoDeEnvido(yo.id)} />}
+        {yo && <Asiento j={yo} {...asientoProps} cantoPunto={burbujaDe(yo.id)} />}
       </div>
     );
   } else if (esUno && esEspectador) {
@@ -261,13 +287,13 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
     const cj1 = estado.cartasJugadas.find((cj) => cj.jugadorId === j1?.id);
     contenidoMesa = (
       <div className="mesa-1v1">
-        <Asiento j={j1} {...asientoProps} cantoPunto={cantoDeEnvido(j1?.id)} />
+        <Asiento j={j1} {...asientoProps} cantoPunto={burbujaDe(j1?.id)} />
         <div className="centro-mesa-vertical">
           <CartaCentral cj={cj1} jugadores={jugadores} />
           <MuestraCentral muestra={estado.muestra} />
           <CartaCentral cj={cj0} jugadores={jugadores} />
         </div>
-        <Asiento j={j0} {...asientoProps} cantoPunto={cantoDeEnvido(j0?.id)} />
+        <Asiento j={j0} {...asientoProps} cantoPunto={burbujaDe(j0?.id)} />
       </div>
     );
   } else {
@@ -279,7 +305,7 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
     contenidoMesa = (
       <div className={`mesa-matriz matriz-${lobby.modo}`}>
         <div className="fila-jugadores">
-          {top.map((j) => <Asiento key={j.id} j={j} {...asientoProps} cantoPunto={cantoDeEnvido(j.id)} />)}
+          {top.map((j) => <Asiento key={j.id} j={j} {...asientoProps} cantoPunto={burbujaDe(j.id)} />)}
         </div>
         <div className="fila-frente">
           {top.map((j) => <CartaFrente key={j.id} cj={cartaDe(j.id)} />)}
@@ -289,7 +315,7 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
           {bottom.map((j) => <CartaFrente key={j.id} cj={cartaDe(j.id)} />)}
         </div>
         <div className="fila-jugadores">
-          {bottom.map((j) => <Asiento key={j.id} j={j} {...asientoProps} cantoPunto={cantoDeEnvido(j.id)} />)}
+          {bottom.map((j) => <Asiento key={j.id} j={j} {...asientoProps} cantoPunto={burbujaDe(j.id)} />)}
         </div>
       </div>
     );
@@ -329,51 +355,62 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
         </div>
       )}
 
-      {!esEspectador && estado.tengoFlor && <div className="banner-flor">🌸 ¡Tenés Flor! Podés cantarla antes de la primera baza.</div>}
-
-      {enRevelacion && (
-        <div className="banner-envido">
-          {revelDone
-            ? `${nombreEquipo(estado.revelacionEnvido.ganador)} ganó el envido (+${estado.revelacionEnvido.puntos})`
-            : "🗣️ Cantando los tantos…"}
-        </div>
-      )}
-
-      <div className="mesa-wrap">
-        <div className="mesa">
-          {contenidoMesa}
-        </div>
-        <HistorialBazas estado={estado} jugadores={jugadores} esUno={esUno} />
+      {/* Mensajes: siempre arriba de la mesa */}
+      <div className="mensajes-arriba">
+        {aviso && <div className="banner-flor">{aviso.texto}</div>}
+        {!esEspectador && estado.tengoFlor && !estado.florInicial && !estado.florDeclarar && !estado.florOpcion && (
+          <div className="banner-flor">🌸 ¡Tenés Flor! Cantala cuando sea tu turno.</div>
+        )}
+        {enRevelacion && (
+          <div className="banner-envido">
+            {revelDone
+              ? `${nombreEquipo(estado.revelacionEnvido.ganador)} ganó el envido (+${estado.revelacionEnvido.puntos})`
+              : "🗣️ Cantando los tantos…"}
+          </div>
+        )}
+        {!esEspectador && !enRevelacion && !estado.manoTerminada && cantoPendiente && (
+          <div className="banner-canto">
+            Canto: <b>{nombreCanto(estado.estadoCanto.nivel)}</b>
+            {!puedoResponderCanto && " — esperando respuesta del rival…"}
+          </div>
+        )}
       </div>
 
-      {!esEspectador && !enRevelacion && !estado.manoTerminada && (cantoPendiente ? (
-        <div className="panel" style={{ marginTop: "1rem", textAlign: "center" }}>
-          <p>Canto: <b>{nombreCanto(estado.estadoCanto.nivel)}</b> ({estado.estadoCanto.tipo})</p>
-          {puedoResponderCanto ? (
-            <div className="acciones-canto">
-              <button className="btn" onClick={() => responder(true)}>Quiero</button>
-              <button className="btn btn-secundario" onClick={() => responder(false)}>No quiero</button>
-              {estado.estadoCanto.tipo === "truco" && estado.trucoNivel < 3 && (
-                <button className="btn" onClick={escalarTruco}>{NIVEL_TEXTO[SIGUIENTE_NIVEL[estado.trucoNivel]]}</button>
-              )}
-              {estado.estadoCanto.tipo === "envido" && (estado.estadoCanto.siguientes || []).map((t) => (
-                <button key={t} className="btn" onClick={() => cantarEnvido(t)}>{ETIQUETA_ENVIDO[t]}</button>
-              ))}
-            </div>
+      {/* Controles a la izquierda + mesa a la derecha */}
+      <div className="mesa-y-controles">
+        <div className="controles-izquierda">
+          {!esEspectador && !enRevelacion && !estado.manoTerminada && (cantoPendiente ? (
+            puedoResponderCanto && (
+              <>
+                <button className="btn" onClick={() => responder(true)}>Quiero</button>
+                <button className="btn btn-secundario" onClick={() => responder(false)}>No quiero</button>
+                {estado.estadoCanto.tipo === "truco" && estado.trucoNivel < 3 && (
+                  <button className="btn" onClick={escalarTruco}>{NIVEL_TEXTO[SIGUIENTE_NIVEL[estado.trucoNivel]]}</button>
+                )}
+                {estado.estadoCanto.tipo === "envido" && (estado.estadoCanto.siguientes || []).map((t) => (
+                  <button key={t} className="btn" onClick={() => cantarEnvido(t)}>{ETIQUETA_ENVIDO[t]}</button>
+                ))}
+              </>
+            )
           ) : (
-            <p className="texto-suave">Esperando respuesta del rival...</p>
-          )}
+            <>
+              {puedoCantarTruco && <button className="btn" onClick={cantarTruco}>{NIVEL_TEXTO[SIGUIENTE_NIVEL[estado.trucoNivel]]}</button>}
+              {estado.envidoDisponible && <button className="btn" onClick={() => cantarEnvido("envido")}>Envido</button>}
+              {estado.envidoDisponible && <button className="btn" onClick={() => cantarEnvido("falta-envido")}>Falta Envido</button>}
+              {(estado.florInicial || estado.florDeclarar) && <button className="btn" onClick={() => cantarFlor("flor")}>🌸 Flor</button>}
+              {estado.florOpcion && <button className="btn" onClick={() => cantarFlor("contraflor-al-resto")}>Contra flor al resto</button>}
+              {estado.florOpcion && <button className="btn btn-secundario" onClick={() => cantarFlor("con-flor-quiero")}>Con flor, quiero</button>}
+              {puedoIrseAlMazo && <button className="btn btn-secundario" onClick={irseAlMazo}>Irse al mazo</button>}
+            </>
+          ))}
         </div>
-      ) : (
-        <div className="acciones-canto">
-          {puedoCantarTruco && <button className="btn" onClick={cantarTruco}>{NIVEL_TEXTO[SIGUIENTE_NIVEL[estado.trucoNivel]]}</button>}
-          {estado.envidoDisponible && <button className="btn" onClick={() => cantarEnvido("envido")}>Envido</button>}
-          {estado.envidoDisponible && <button className="btn" onClick={() => cantarEnvido("falta-envido")}>Falta Envido</button>}
-          {estado.tengoFlor && <button className="btn" onClick={() => cantarFlor("flor")}>🌸 Flor</button>}
-          {estado.tengoFlor && <button className="btn" onClick={() => cantarFlor("contraflor")}>Contraflor</button>}
-          {puedoIrseAlMazo && <button className="btn btn-secundario" onClick={irseAlMazo}>Irse al mazo</button>}
+        <div className="mesa-wrap">
+          <div className="mesa">
+            {contenidoMesa}
+          </div>
+          <HistorialBazas estado={estado} jugadores={jugadores} esUno={esUno} />
         </div>
-      ))}
+      </div>
 
       {estado.manoTerminada && (
         <div className="panel" style={{ marginTop: "1rem", textAlign: "center" }}>

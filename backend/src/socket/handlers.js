@@ -105,6 +105,14 @@ function armarTimerJugada(io, lobby) {
       // No corresponde jugar/responder por timeout si la mano terminó, hay una baza
       // pendiente de resolver o estamos en la revelación del envido.
       if (engine.manoTerminada || engine.bazaPendiente || engine.revelacionEnvido) return;
+      // Contienda de flor esperando declaración/opción (sin canto pendiente): se
+      // resuelve automáticamente por la flor más alta si nadie responde a tiempo.
+      if (engine.florCanto && !engine.estadoCanto) {
+        engine.resolverFlorContienda("flor");
+        emitirEstado(io, lobby);
+        if (!engine.manoTerminada) armarTimerJugada(io, lobby);
+        return;
+      }
       const ec = engine.estadoCanto;
       if (ec && !ec.respondido) {
         // Responde automáticamente "no quiero" en nombre del equipo que debe responder

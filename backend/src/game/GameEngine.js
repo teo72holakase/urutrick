@@ -4,6 +4,9 @@ const PUNTOS_TRUCO = { truco: 2, retruco: 3, vale4: 4 };
 const NIVELES_TRUCO = ["truco", "retruco", "vale4"];
 const VALOR_ENVIDO_CANTO = { envido: 2, "real-envido": 3 };
 const PUNTOS_FLOR = { flor: 3, contraflor: 6, "contraflor-al-resto": null };
+const TEXTO_TRUCO = { truco: "Truco", retruco: "Retruco", vale4: "Vale 4" };
+const TEXTO_ENVIDO = { envido: "Envido", "real-envido": "Real Envido", "falta-envido": "Falta Envido" };
+const TEXTO_FLOR = { flor: "Flor", contraflor: "Contraflor", "contraflor-al-resto": "Contra flor al resto" };
 
 export class GameEngine {
   constructor(lobby) {
@@ -13,6 +16,8 @@ export class GameEngine {
     this.manoIndex = 0;
     this.historialManos = [];
     this.revelacionSeq = 0;
+    this.accionSeq = 0;
+    this.avisoSeq = 0;
     this.reset();
   }
 
@@ -35,8 +40,33 @@ export class GameEngine {
     this.envidoResuelto = false;
     this.florResuelta = false;
     this.revelacionEnvido = null; // sub-estado FASE_ENVIDO: canto de tantos en curso
+    this.florCanto = null; // sub-estado de flor cuando ambos equipos tienen flor
+    this.accionReciente = null; // burbuja de acción sobre un jugador ({id, jugadorId, texto})
+    this.avisoTop = null; // mensaje temporal arriba ({id, texto})
     this.manoTerminada = false;
     this.ganadorMano = null;
+  }
+
+  // Burbuja de acción (Quiero, Truco, Me voy al mazo...) sobre la cabeza del jugador.
+  registrarAccion(jugadorId, texto) {
+    this.accionReciente = { id: ++this.accionSeq, jugadorId, texto };
+  }
+
+  // Mensaje temporal arriba de la mesa (ej: "+3 de flor para X").
+  avisar(texto) {
+    this.avisoTop = { id: ++this.avisoSeq, texto };
+  }
+
+  nombreDeJugador(jugadorId) {
+    return this.lobby.jugadores.find((j) => j.id === jugadorId)?.nombre || "";
+  }
+
+  // En 1v1 se usa el nombre del jugador; en 2v2/3v3 "Equipo A/B".
+  nombreDeEquipo(equipo) {
+    if (this.lobby.modo === "1v1") {
+      return this.lobby.jugadores.find((j) => j.equipo === equipo)?.nombre || `Equipo ${equipo}`;
+    }
+    return `Equipo ${equipo}`;
   }
 
   // Un jugador "ya jugó" si tiene una carta en la baza en curso o en una resuelta.
@@ -70,6 +100,7 @@ export class GameEngine {
   jugarCarta(jugadorId, cartaId) {
     if (this.manoTerminada) throw new Error("La mano ya terminó");
     if (this.revelacionEnvido) throw new Error("Fase de envido en curso");
+    if (this.florCanto) throw new Error("Hay una flor pendiente");
     if (this.jugadorActual().id !== jugadorId) throw new Error("No es tu turno");
     if (this.estadoCanto && !this.estadoCanto.respondido) throw new Error("Hay un canto pendiente");
     if (this.bazaPendiente) throw new Error("Esperando que se resuelva la baza");
@@ -103,11 +134,13 @@ export class GameEngine {
 
   irseAlMazo(jugadorId) {
     if (this.revelacionEnvido) throw new Error("Fase de envido en curso");
+    if (this.florCanto) throw new Error("Hay una flor pendiente");
     if (this.manoTerminada) throw new Error("La mano ya terminó");
     if (this.bazaPendiente) throw new Error("Esperando que se resuelva la baza");
     const equipo = this.equipoDe(jugadorId);
     const rival = this.rivalDe(equipo);
     const puntos = this.trucoNivel > 0 ? PUNTOS_TRUCO[NIVELES_TRUCO[this.trucoNivel - 1]] : 1;
+    this.registrarAccion(jugadorId, "Me voy al mazo");
     this.registrarPuntos(rival, puntos, `${this.trucoNivel > 0 ? NIVELES_TRUCO[this.trucoNivel - 1] : "mano"} (se fueron al mazo)`);
     this.estadoCanto = null;
     this.cerrarMano(rival);
@@ -154,6 +187,7 @@ export class GameEngine {
   // --- Truco: respeta la "palabra" (quién puede cantar/subir) ---
   cantarTruco(jugadorId) {
     if (this.revelacionEnvido) throw new Error("Fase de envido en curso");
+    if (this.florCanto) throw new Error("Hay una flor pendiente");
     if (this.estadoCanto && !this.estadoCanto.respondido) throw new Error("Hay un canto pendiente");
     if (this.bazaPendiente) throw new Error("Esperando que se resuelva la baza");
     if (this.trucoNivel >= 3) throw new Error("Ya está en vale4");
@@ -162,6 +196,7 @@ export class GameEngine {
     this.trucoNivel += 1;
     const equipoRival = this.rivalDe(equipo);
     this.estadoCanto = { tipo: "truco", nivel: NIVELES_TRUCO[this.trucoNivel - 1], equipoQueCanto: equipo, equipoQueResponde: equipoRival, respondido: false };
+    this.registrarAccion(jugadorId, TEXTO_TRUCO[NIVELES_TRUCO[this.trucoNivel - 1]]);
     return this.estadoCanto;
   }
 
@@ -170,6 +205,7 @@ export class GameEngine {
     if (this.equipoDe(jugadorId) === this.estadoCanto.equipoQueCanto) throw new Error("No podés responder tu propio canto");
     const equipoRival = this.rivalDe(this.estadoCanto.equipoQueCanto);
     this.estadoCanto.respondido = true;
+    this.registrarAccion(jugadorId, quiero ? "Quiero" : "No quiero");
     if (!quiero) {
       const nivel = NIVELES_TRUCO[this.trucoNivel - 1];
       const puntosPrevios = this.trucoNivel <= 1 ? 1 : PUNTOS_TRUCO[NIVELES_TRUCO[this.trucoNivel - 2]];
@@ -221,6 +257,7 @@ export class GameEngine {
   // envido pendiente, este canto se trata como una escalada: NO se resuelve, queda
   // pendiente para que responda el otro equipo (ahí aparece Quiero/No quiero/subir).
   cantarEnvido(jugadorId, tipo) {
+    if (this.florCanto) throw new Error("Hay una flor pendiente");
     const equipo = this.equipoDe(jugadorId);
     const ec = this.estadoCanto;
     if (ec && ec.tipo === "envido" && !ec.respondido) {
@@ -234,6 +271,7 @@ export class GameEngine {
       ec.equipoQueCanto = equipo;
       ec.equipoQueResponde = this.rivalDe(equipo);
       ec.siguientes = this.siguientesEnvidoValidos(ec.cadena);
+      this.registrarAccion(jugadorId, TEXTO_ENVIDO[tipo]);
       return ec;
     }
     if (this.haJugadoCarta(jugadorId)) throw new Error("No podés cantar envido: ya jugaste una carta en la ronda");
@@ -251,6 +289,7 @@ export class GameEngine {
       siguientes: this.siguientesEnvidoValidos(cadena),
       respondido: false,
     };
+    this.registrarAccion(jugadorId, TEXTO_ENVIDO[tipo]);
     return this.estadoCanto;
   }
 
@@ -312,6 +351,7 @@ export class GameEngine {
     if (this.equipoDe(jugadorId) === ec.equipoQueCanto) throw new Error("No podés responder tu propio canto");
     ec.respondido = true;
     this.envidoResuelto = true;
+    this.registrarAccion(jugadorId, quiero ? "Quiero" : "No quiero");
     if (!quiero) {
       this.registrarPuntos(ec.equipoQueCanto, ec.acumuladoNoQuerido, `${ec.nivel.replace(/-/g, " ")} no querido`);
       this.estadoCanto = null;
@@ -400,29 +440,75 @@ export class GameEngine {
     return { ganador, mejorA, mejorB };
   }
 
+  // Resuelve la contienda de flor (ambos equipos con flor): gana la flor más alta.
+  resolverFlorContienda(nivel = "flor") {
+    const { ganador } = this.resolverGanadorFlor();
+    let puntos;
+    if (nivel === "contraflor-al-resto") puntos = Math.max(1, this.puntajeLimite - this.puntos[ganador]);
+    else puntos = PUNTOS_FLOR[nivel] ?? PUNTOS_FLOR.flor;
+    this.registrarPuntos(ganador, puntos, nivel.replace(/-/g, " "));
+    this.florResuelta = true;
+    this.florCanto = null;
+    this.estadoCanto = null;
+    this.avisar(`${this.nombreDeEquipo(ganador)} ganó la flor (+${puntos})`);
+    return { resuelto: true, ganador, puntos };
+  }
+
+  // Flujo de flor:
+  //  - Canto inicial: si el rival NO tiene flor → +3 automáticos y aviso arriba.
+  //    Si el rival tiene flor → queda esperando que el rival también diga "Flor".
+  //  - El rival dice "Flor" (contra-declaración) → el primer equipo puede escalar a
+  //    "Contra flor al resto" o resolver ("Con flor quiero").
   cantarFlor(jugadorId, tipo = "flor") {
     if (this.florResuelta) throw new Error("La flor ya se jugó esta mano");
     if (this.bazas.length > 0) throw new Error("La flor solo se canta antes de la primera baza");
     if (this.bazaPendiente) throw new Error("Esperando que se resuelva la baza");
-    if (!this.tieneFlor(jugadorId)) throw new Error("No tenés flor");
     const equipo = this.equipoDe(jugadorId);
     const equipoRival = this.rivalDe(equipo);
-    this.envidoResuelto = true; // la flor "mata" al envido
 
-    // Si el otro equipo NO tiene flor: son 3 puntos automáticos para el equipo con
-    // flor (aunque tenga dos jugadores con flor, siguen siendo 3 en total).
+    // Opción del primer equipo tras la contra-declaración del rival.
+    if (this.florCanto && this.florCanto.fase === "opcion") {
+      if (equipo !== this.florCanto.primerEquipo) throw new Error("No es tu opción de flor");
+      if (tipo === "contraflor-al-resto") {
+        this.registrarAccion(jugadorId, TEXTO_FLOR["contraflor-al-resto"]);
+        this.florCanto.fase = "contraflor";
+        this.estadoCanto = { tipo: "flor", nivel: "contraflor-al-resto", equipoQueCanto: equipo, equipoQueResponde: equipoRival, respondido: false };
+        return this.estadoCanto;
+      }
+      // "Con flor quiero": se resuelve la contienda de flor por la más alta.
+      this.registrarAccion(jugadorId, "Con flor quiero");
+      return this.resolverFlorContienda("flor");
+    }
+
+    // Contra-declaración del rival: también dice "Flor".
+    if (this.florCanto && this.florCanto.fase === "esperando-rival") {
+      if (equipo !== this.rivalDe(this.florCanto.primerEquipo)) throw new Error("No es tu turno de flor");
+      if (!this.tieneFlor(jugadorId)) throw new Error("No tenés flor");
+      this.registrarAccion(jugadorId, TEXTO_FLOR.flor);
+      this.florCanto.equipos.push(equipo);
+      this.florCanto.fase = "opcion";
+      return this.florCanto;
+    }
+
+    // Canto inicial de flor.
+    if (!this.tieneFlor(jugadorId)) throw new Error("No tenés flor");
+    this.envidoResuelto = true; // la flor "mata" al envido
+    this.registrarAccion(jugadorId, TEXTO_FLOR.flor);
+
+    // Si el otro equipo NO tiene flor: 3 puntos automáticos (aunque dos compañeros
+    // tengan flor, siguen siendo 3) y mensaje arriba durante unos segundos.
     const rivalTieneFlor = this.equiposConFlor().includes(equipoRival);
     if (!rivalTieneFlor) {
       this.registrarPuntos(equipo, PUNTOS_FLOR.flor, "flor");
       this.florResuelta = true;
       this.estadoCanto = null;
+      this.avisar(`+${PUNTOS_FLOR.flor} de flor para ${this.nombreDeEquipo(equipo)}`);
       return { resuelto: true, ganador: equipo, puntos: PUNTOS_FLOR.flor };
     }
 
-    // Ambos equipos tienen flor: se juega la contienda (envido de flor / contraflor)
-    // para definir quién se lleva los puntos.
-    this.estadoCanto = { tipo: "flor", nivel: tipo, equipoQueCanto: equipo, equipoQueResponde: equipoRival, respondido: false };
-    return this.estadoCanto;
+    // Ambos equipos tienen flor: se espera que el rival también diga "Flor".
+    this.florCanto = { primerEquipo: equipo, equipos: [equipo], fase: "esperando-rival" };
+    return this.florCanto;
   }
 
   responderFlor(jugadorId, quiero) {
@@ -430,20 +516,18 @@ export class GameEngine {
     if (!ec || ec.tipo !== "flor") throw new Error("No hay flor pendiente");
     if (this.equipoDe(jugadorId) === ec.equipoQueCanto) throw new Error("No podés responder tu propio canto");
     ec.respondido = true;
-    this.florResuelta = true;
-    if (!quiero) {
-      // No se juega la contienda: el que cantó se lleva los 3 de su flor.
-      this.registrarPuntos(ec.equipoQueCanto, PUNTOS_FLOR.flor, `${ec.nivel.replace(/-/g, " ")} no querida`);
-      this.estadoCanto = null;
-      return { quiero, ganador: null };
-    }
-    const { ganador, mejorA, mejorB } = this.resolverGanadorFlor();
-    let puntos;
-    if (ec.nivel === "contraflor-al-resto") puntos = Math.max(1, this.puntajeLimite - this.puntos[ganador]);
-    else puntos = PUNTOS_FLOR[ec.nivel] ?? PUNTOS_FLOR.flor;
-    this.registrarPuntos(ganador, puntos, ec.nivel.replace(/-/g, " "));
+    this.registrarAccion(jugadorId, quiero ? "Quiero" : "No quiero");
     this.estadoCanto = null;
-    return { quiero, ganador, mejorA, mejorB };
+    if (!quiero) {
+      // No quiere la contra flor al resto: el que la cantó se lleva la flor en juego.
+      this.registrarPuntos(ec.equipoQueCanto, PUNTOS_FLOR.flor, `${ec.nivel.replace(/-/g, " ")} no querida`);
+      this.florResuelta = true;
+      this.florCanto = null;
+      this.avisar(`${this.nombreDeEquipo(ec.equipoQueCanto)} ganó la flor (+${PUNTOS_FLOR.flor})`);
+      return { quiero, ganador: ec.equipoQueCanto };
+    }
+    const res = this.resolverFlorContienda(ec.nivel);
+    return { quiero, ganador: res.ganador };
   }
 
   finDePartida() {
@@ -478,11 +562,22 @@ export class GameEngine {
       trucoPalabra: this.trucoPalabra,
       estadoCanto: this.estadoCanto,
       revelacionEnvido: this.revelacionEnvido,
+      accionReciente: this.accionReciente,
+      avisoTop: this.avisoTop,
       manoTerminada: this.manoTerminada,
       ganadorMano: this.ganadorMano,
       historialManos: this.historialManos,
       envidoDisponible: !esEspectador && this.envidoDisponible(paraJugadorId),
       tengoFlor: !esEspectador && this.bazas.length === 0 && !this.bazaPendiente && !this.florResuelta && this.tieneFlor(paraJugadorId),
+      // Botón "Flor" inicial: sólo en el turno del jugador y antes de que arranque la contienda.
+      florInicial: !esEspectador && !this.florCanto && !this.florResuelta && this.bazas.length === 0 && !this.bazaPendiente
+        && this.jugadorActual().id === paraJugadorId && this.tieneFlor(paraJugadorId),
+      // Botón "Flor" del rival (contra-declaración) cuando el primer equipo ya cantó.
+      florDeclarar: !esEspectador && !!this.florCanto && this.florCanto.fase === "esperando-rival"
+        && this.equipoDe(paraJugadorId) === this.rivalDe(this.florCanto.primerEquipo) && this.tieneFlor(paraJugadorId),
+      // Opción "Contra flor al resto" sólo para el primer equipo, y sólo tras la contra-declaración.
+      florOpcion: !esEspectador && !!this.florCanto && this.florCanto.fase === "opcion"
+        && this.equipoDe(paraJugadorId) === this.florCanto.primerEquipo,
       manos: Object.fromEntries(
         jugadores.map((j) => {
           const mostrar = esEspectador || j.id === paraJugadorId || (verCartasCompanero && j.equipo === equipoPropio);
