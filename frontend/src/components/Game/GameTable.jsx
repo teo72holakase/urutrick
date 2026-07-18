@@ -183,7 +183,7 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
   const jugadores = lobby.jugadores;
   const esUno = lobby.modo === "1v1";
   const enRevelacion = !!estado.revelacionEnvido;
-  const esMiTurno = !esEspectador && estado.turno === userId && !estado.bazaPendiente && !enRevelacion;
+  const esMiTurno = !esEspectador && estado.turno === userId && !estado.bazaPendiente && !enRevelacion && !estado.manoTerminada;
 
   // Texto de la burbuja de tantos que corresponde a un jugador en este instante.
   // Aparecen en orden (revelCount) y cada una queda hasta que aparezca un puntaje

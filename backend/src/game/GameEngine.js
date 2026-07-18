@@ -68,6 +68,7 @@ export class GameEngine {
 
   // --- Jugar carta ---
   jugarCarta(jugadorId, cartaId) {
+    if (this.manoTerminada) throw new Error("La mano ya terminó");
     if (this.revelacionEnvido) throw new Error("Fase de envido en curso");
     if (this.jugadorActual().id !== jugadorId) throw new Error("No es tu turno");
     if (this.estadoCanto && !this.estadoCanto.respondido) throw new Error("Hay un canto pendiente");
