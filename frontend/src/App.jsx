@@ -96,6 +96,17 @@ export default function App() {
     return () => socket.off("connect", alConectar);
   }, [user]);
 
+  // Red de seguridad (sobre todo en celular): si ya estamos en juego pero el
+  // "estado" no llegó (se perdió por una reconexión del socket), lo re-pedimos
+  // hasta recibirlo, en vez de quedarnos clavados en "Repartiendo cartas...".
+  useEffect(() => {
+    if (!lobby || !enJuego || estadoJuego) return;
+    const pedir = () => socket.emit("juego:pedir-estado", { lobbyId: lobby.id });
+    pedir();
+    const t = setInterval(pedir, 1500);
+    return () => clearInterval(t);
+  }, [lobby, enJuego, estadoJuego]);
+
   function entrarLobby(l) {
     setLobby(l);
     setEsEspectador(false);

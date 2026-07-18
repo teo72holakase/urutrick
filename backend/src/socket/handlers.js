@@ -58,34 +58,62 @@ function finalizarPartida(io, lobby, ganador) {
   }, 5 * 60 * 1000);
 }
 
-// Si una mesa iniciada queda con un solo jugador conectado, tras DELAY_ABANDONO
-// se cierra la partida y gana el que quedó. Se cancela si alguien reconecta.
+// Gestiona los cierres automáticos de una mesa, cancelables si alguien reconecta:
+//  - Mesa INICIADA que queda con un solo jugador conectado -> gana el que quedó.
+//  - Mesa NO iniciada (sala de espera) sin nadie conectado -> se elimina para no
+//    dejar mesas fantasma en el browser.
 function verificarAbandono(io, lobby) {
   if (!lobby) return;
-  if (!lobby.iniciado || !lobby.engine || lobby.finalizada) {
+  const cancelar = () => {
     const t = abandonoTimers.get(lobby.id);
     if (t) { clearTimeout(t); abandonoTimers.delete(lobby.id); }
+  };
+  if (lobby.finalizada) { cancelar(); return; }
+
+  const conectados = lobby.jugadores.filter((j) => conexiones.has(j.id));
+
+  if (lobby.iniciado && lobby.engine) {
+    if (conectados.length === 1 && lobby.jugadores.length >= 2) {
+      if (abandonoTimers.has(lobby.id)) return;
+      const handle = setTimeout(() => {
+        abandonoTimers.delete(lobby.id);
+        if (!lobby.iniciado || !lobby.engine || lobby.finalizada) return;
+        const quedan = lobby.jugadores.filter((j) => conexiones.has(j.id));
+        if (quedan.length !== 1) return;
+        finalizarPartida(io, lobby, lobby.engine.equipoDe(quedan[0].id));
+      }, DELAY_ABANDONO);
+      abandonoTimers.set(lobby.id, handle);
+    } else {
+      cancelar();
+    }
     return;
   }
-  const conectados = lobby.jugadores.filter((j) => conexiones.has(j.id));
-  if (conectados.length === 1 && lobby.jugadores.length >= 2) {
+
+  // Mesa en sala de espera: si no queda NADIE conectado (ni jugadores ni
+  // espectadores), se elimina tras DELAY_ABANDONO.
+  const espectConectados = (lobby.espectadores || []).filter((e) => conexiones.has(e.id));
+  if (conectados.length === 0 && espectConectados.length === 0) {
     if (abandonoTimers.has(lobby.id)) return;
     const handle = setTimeout(() => {
       abandonoTimers.delete(lobby.id);
-      if (!lobby.iniciado || !lobby.engine || lobby.finalizada) return;
-      const quedan = lobby.jugadores.filter((j) => conexiones.has(j.id));
-      if (quedan.length !== 1) return;
-      finalizarPartida(io, lobby, lobby.engine.equipoDe(quedan[0].id));
+      const l = lobbyManager.get(lobby.id);
+      if (!l || l.iniciado) return;
+      const hayAlguien = l.jugadores.some((j) => conexiones.has(j.id))
+        || (l.espectadores || []).some((e) => conexiones.has(e.id));
+      if (hayAlguien) return;
+      lobbyManager.eliminar(l.id);
+      io.emit("lobby:actualizado", lobbyManager.listarPublicos());
     }, DELAY_ABANDONO);
     abandonoTimers.set(lobby.id, handle);
   } else {
-    const t = abandonoTimers.get(lobby.id);
-    if (t) { clearTimeout(t); abandonoTimers.delete(lobby.id); }
+    cancelar();
   }
 }
 
 function lobbiesDeJugador(userId) {
-  return [...lobbyManager.lobbies.values()].filter((l) => l.jugadores.some((j) => j.id === userId));
+  return [...lobbyManager.lobbies.values()].filter(
+    (l) => l.jugadores.some((j) => j.id === userId) || (l.espectadores || []).some((e) => e.id === userId)
+  );
 }
 
 // Cuando ya se jugaron todas las cartas de la baza, primero se emite el estado
@@ -274,6 +302,23 @@ export function registrarHandlers(io, socket) {
       socket.join(lobbyId);
       cb?.({ ok: true, lobby, iniciado: lobby.iniciado, esEspectador });
       if (lobby.iniciado) emitirA(io, userId, "estado", lobby.engine.estadoPublico(userId, esEspectador));
+    } catch (e) { cb?.({ ok: false, error: e.message }); }
+  });
+
+  // Re-pedir el estado actual si al cliente no le llegó (típico en celular tras
+  // una reconexión: el "estado" se emitió al socket viejo). Se responde a ESTE
+  // socket directamente y se refresca el mapa de conexiones.
+  socket.on("juego:pedir-estado", ({ lobbyId }, cb) => {
+    try {
+      const lobby = lobbyManager.get(lobbyId);
+      if (!lobby || !lobby.iniciado || !lobby.engine) return cb?.({ ok: false });
+      const esEspectador = lobby.espectadores.some((e) => e.id === userId);
+      const esJugador = lobby.jugadores.some((j) => j.id === userId);
+      if (!esJugador && !esEspectador) return cb?.({ ok: false });
+      conexiones.set(userId, socket.id);
+      socket.join(lobbyId);
+      socket.emit("estado", lobby.engine.estadoPublico(userId, esEspectador));
+      cb?.({ ok: true });
     } catch (e) { cb?.({ ok: false, error: e.message }); }
   });
 
