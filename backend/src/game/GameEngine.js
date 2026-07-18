@@ -27,6 +27,7 @@ export class GameEngine {
     jugadores.forEach((j, i) => { this.manos[j.id] = mazo.slice(i * 3, i * 3 + 3); });
     this.muestra = mazo[jugadores.length * 3] || mazo[0];
     this.turnoIndex = this.manoIndex;
+    this.bazaPendiente = false;
     this.estadoCanto = null;
     this.trucoNivel = 0;
     this.trucoPalabra = this.equipoDe(jugadores[this.manoIndex].id); // quién puede cantar/subir el truco
@@ -58,14 +59,26 @@ export class GameEngine {
   jugarCarta(jugadorId, cartaId) {
     if (this.jugadorActual().id !== jugadorId) throw new Error("No es tu turno");
     if (this.estadoCanto && !this.estadoCanto.respondido) throw new Error("Hay un canto pendiente");
+    if (this.bazaPendiente) throw new Error("Esperando que se resuelva la baza");
     const mano = this.manos[jugadorId];
     const idx = mano.findIndex((c) => c.id === cartaId);
     if (idx === -1) throw new Error("No tenés esa carta");
     const [carta] = mano.splice(idx, 1);
     this.cartasJugadas.push({ jugadorId, carta });
     this.siguienteTurno();
-    if (this.cartasJugadas.length === this.jugadoresOrdenados().length) this.resolverBaza();
+    // No resolvemos la baza al instante: la dejamos "pendiente" para que las cartas
+    // jugadas se vean un momento en el centro de la mesa antes de recogerse.
+    if (this.cartasJugadas.length === this.jugadoresOrdenados().length) this.bazaPendiente = true;
     return carta;
+  }
+
+  // Se llama desde el servidor, con un pequeño delay, una vez que ya se
+  // emitió el estado con las cartas jugadas visibles para todos.
+  resolverBazaPendienteSiCorresponde() {
+    if (!this.bazaPendiente) return false;
+    this.bazaPendiente = false;
+    this.resolverBaza();
+    return true;
   }
 
   jugarCartaAleatoria(jugadorId) {
@@ -77,6 +90,7 @@ export class GameEngine {
 
   irseAlMazo(jugadorId) {
     if (this.manoTerminada) throw new Error("La mano ya terminó");
+    if (this.bazaPendiente) throw new Error("Esperando que se resuelva la baza");
     const equipo = this.equipoDe(jugadorId);
     const rival = this.rivalDe(equipo);
     const puntos = this.trucoNivel > 0 ? PUNTOS_TRUCO[NIVELES_TRUCO[this.trucoNivel - 1]] : 1;
@@ -119,6 +133,7 @@ export class GameEngine {
   // --- Truco: respeta la "palabra" (quién puede cantar/subir) ---
   cantarTruco(jugadorId) {
     if (this.estadoCanto && !this.estadoCanto.respondido) throw new Error("Hay un canto pendiente");
+    if (this.bazaPendiente) throw new Error("Esperando que se resuelva la baza");
     if (this.trucoNivel >= 3) throw new Error("Ya está en vale4");
     const equipo = this.equipoDe(jugadorId);
     if (equipo !== this.trucoPalabra) throw new Error("No tenés la palabra para cantar truco");
@@ -153,7 +168,11 @@ export class GameEngine {
   }
 
   envidoDisponible() {
-    return !this.envidoResuelto && this.bazas.length === 0 && this.cartasJugadas.length === 0 && !this.algunTieneFlorSinResolver();
+    // Se puede cantar durante toda la primera ronda (primera baza), sin importar
+    // cuántas cartas ya se jugaron en ella. Deja de estar disponible recién en
+    // la 2da ronda (this.bazas.length > 0), si ya se resolvió (jugado o con
+    // flor de por medio) o si hay una flor sin resolver todavía.
+    return !this.envidoResuelto && this.bazas.length === 0 && !this.bazaPendiente && !this.algunTieneFlorSinResolver();
   }
 
   cantarEnvido(jugadorId, tipo) {
@@ -217,6 +236,7 @@ export class GameEngine {
   cantarFlor(jugadorId, tipo = "flor") {
     if (this.florResuelta) throw new Error("La flor ya se jugó esta mano");
     if (this.bazas.length > 0) throw new Error("La flor solo se canta antes de la primera baza");
+    if (this.bazaPendiente) throw new Error("Esperando que se resuelva la baza");
     if (!this.tieneFlor(jugadorId)) throw new Error("No tenés flor");
     const equipo = this.equipoDe(jugadorId);
     const equipoRival = this.rivalDe(equipo);
@@ -272,6 +292,7 @@ export class GameEngine {
       turno: this.jugadorActual().id,
       muestra: this.muestra,
       cartasJugadas: this.cartasJugadas,
+      bazaPendiente: !!this.bazaPendiente,
       puntos: this.puntos,
       trucoNivel: this.trucoNivel,
       trucoPalabra: this.trucoPalabra,
@@ -280,7 +301,7 @@ export class GameEngine {
       ganadorMano: this.ganadorMano,
       historialManos: this.historialManos,
       envidoDisponible: !esEspectador && this.envidoDisponible(),
-      tengoFlor: !esEspectador && this.bazas.length === 0 && !this.florResuelta && this.tieneFlor(paraJugadorId),
+      tengoFlor: !esEspectador && this.bazas.length === 0 && !this.bazaPendiente && !this.florResuelta && this.tieneFlor(paraJugadorId),
       manos: Object.fromEntries(
         jugadores.map((j) => {
           const mostrar = esEspectador || j.id === paraJugadorId || (verCartasCompanero && j.equipo === equipoPropio);

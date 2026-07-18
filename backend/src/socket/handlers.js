@@ -5,7 +5,10 @@ import { guardarHistorial } from "../lib/appwrite.js";
 const lobbyManager = new LobbyManager();
 const timers = new Map(); // lobbyId -> TurnTimer
 const sigManoTimers = new Map(); // lobbyId -> setTimeout handle
+const bazaTimers = new Map(); // lobbyId -> setTimeout handle (delay antes de recoger la baza)
 const conexiones = new Map(); // userId -> socket.id actual
+
+const DELAY_RESOLVER_BAZA = 1100; // ms que quedan las cartas jugadas visibles en el centro de la mesa
 
 function emitirA(io, userId, evento, payload) {
   const sid = conexiones.get(userId);
@@ -26,6 +29,25 @@ function programarSiguienteMano(io, lobby) {
     }
   }, 6000);
   sigManoTimers.set(lobby.id, handle);
+}
+
+// Cuando ya se jugaron todas las cartas de la baza, primero se emite el estado
+// (así todos ven las cartas servidas en el centro de la mesa) y recién después,
+// con un pequeño delay, se resuelve la baza (se calcula ganador y se recogen).
+function programarResolucionBaza(io, lobby) {
+  if (bazaTimers.has(lobby.id)) return;
+  const handle = setTimeout(() => {
+    bazaTimers.delete(lobby.id);
+    try {
+      if (!lobby.engine) return;
+      lobby.engine.resolverBazaPendienteSiCorresponde();
+      emitirEstado(io, lobby);
+      if (!lobby.engine.manoTerminada) armarTimerJugada(io, lobby);
+    } catch (e) {
+      console.error(`Error al resolver baza de mesa ${lobby.id}:`, e);
+    }
+  }, DELAY_RESOLVER_BAZA);
+  bazaTimers.set(lobby.id, handle);
 }
 
 function emitirEstado(io, lobby) {
@@ -66,7 +88,11 @@ function armarTimerJugada(io, lobby) {
         lobby.engine.jugarCartaAleatoria(jugadorId);
       }
       emitirEstado(io, lobby);
-      if (!lobby.engine.manoTerminada) armarTimerJugada(io, lobby);
+      if (lobby.engine.bazaPendiente) {
+        programarResolucionBaza(io, lobby);
+      } else if (!lobby.engine.manoTerminada) {
+        armarTimerJugada(io, lobby);
+      }
     } catch (e) {
       console.error(`Error en timer de jugada de mesa ${lobby.id}:`, e);
     }
@@ -157,7 +183,12 @@ export function registrarHandlers(io, socket) {
       const lobby = lobbyManager.get(lobbyId);
       lobby.engine.jugarCarta(userId, cartaId);
       emitirEstado(io, lobby);
-      if (!lobby.engine.manoTerminada) armarTimerJugada(io, lobby);
+      if (lobby.engine.bazaPendiente) {
+        timers.get(lobby.id)?.cancelar();
+        programarResolucionBaza(io, lobby);
+      } else if (!lobby.engine.manoTerminada) {
+        armarTimerJugada(io, lobby);
+      }
       cb?.({ ok: true });
     } catch (e) { cb?.({ ok: false, error: e.message }); }
   });

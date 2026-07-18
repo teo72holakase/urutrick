@@ -15,7 +15,7 @@ function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, j
         {esModoEquipos && <span className={`letra-equipo letra-${j.equipo.toLowerCase()}`}>{j.equipo}</span>}
         <span>{j.nombre}</span>
         {lobby.jugadores[estado.manoIndex]?.id === j.id && <span className="icono-mano" title="Es mano">M</span>}
-        {estado.turno === j.id && <span className="icono-turno" title="Turno">👉</span>}
+        {!estado.bazaPendiente && estado.turno === j.id && <span className="icono-turno" title="Turno">👉</span>}
       </div>
       <div className={`fila-cartas ${recogiendo ? "recogiendo" : ""}`}>
         {slots.map((slot, i) => {
@@ -43,15 +43,29 @@ function CartaCentral({ cj, jugadores }) {
   );
 }
 
+// Mazo + muestra, agrandados y centrados entre los dos jugadores/equipos.
+function MuestraCentral({ muestra }) {
+  if (!muestra) return null;
+  return (
+    <div className="muestra-central">
+      <div className="mazo-tapado-grande" />
+      <PlayingCard carta={muestra} className="carta-muestra-grande" />
+    </div>
+  );
+}
+
 function CentroMesa({ estado, jugadores }) {
   return (
     <div className="centro-mesa">
-      {estado.cartasJugadas.map((cj, i) => (
-        <div key={`${cj.carta.id}-${i}`} className="carta-jugada-anim">
-          <PlayingCard carta={cj.carta} />
-          <div className="etiqueta-jugada">{jugadores.find((j) => j.id === cj.jugadorId)?.nombre || ""}</div>
-        </div>
-      ))}
+      <MuestraCentral muestra={estado.muestra} />
+      <div className="cartas-en-mesa">
+        {estado.cartasJugadas.map((cj, i) => (
+          <div key={`${cj.carta.id}-${i}`} className="carta-jugada-anim">
+            <PlayingCard carta={cj.carta} />
+            <div className="etiqueta-jugada">{jugadores.find((j) => j.id === cj.jugadorId)?.nombre || ""}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -85,14 +99,14 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
 
   const jugadores = lobby.jugadores;
   const esUno = lobby.modo === "1v1";
-  const esMiTurno = !esEspectador && estado.turno === userId;
+  const esMiTurno = !esEspectador && estado.turno === userId && !estado.bazaPendiente;
   const miEquipo = jugadores.find((j) => j.id === userId)?.equipo || "A";
   const cantoPendiente = estado.estadoCanto && !estado.estadoCanto.respondido;
   const puedoResponderCanto = !esEspectador && cantoPendiente && estado.estadoCanto.equipoQueResponde === miEquipo;
   const nombreEquipoA = esUno ? (jugadores.find((j) => j.equipo === "A")?.nombre || "Equipo A") : "Equipo A";
   const nombreEquipoB = esUno ? (jugadores.find((j) => j.equipo === "B")?.nombre || "Equipo B") : "Equipo B";
-  const puedoCantarTruco = !esEspectador && !cantoPendiente && estado.trucoNivel < 3 && estado.trucoPalabra === miEquipo;
-  const puedoIrseAlMazo = !esEspectador && !cantoPendiente && !estado.manoTerminada;
+  const puedoCantarTruco = !esEspectador && !cantoPendiente && !estado.bazaPendiente && estado.trucoNivel < 3 && estado.trucoPalabra === miEquipo;
+  const puedoIrseAlMazo = !esEspectador && !cantoPendiente && !estado.bazaPendiente && !estado.manoTerminada;
 
   function jugarCarta(cartaId) { if (!esEspectador) socket.emit("juego:jugar-carta", { lobbyId: lobby.id, cartaId }); }
   function cantarTruco() { socket.emit("juego:cantar-truco", { lobbyId: lobby.id }); }
@@ -133,6 +147,7 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
       <div className="mesa-1v1">
         {rival && <Asiento j={rival} {...asientoProps} />}
         <div className="centro-mesa-vertical">
+          <MuestraCentral muestra={estado.muestra} />
           <CartaCentral cj={cjRival} jugadores={jugadores} />
           <CartaCentral cj={cjMia} jugadores={jugadores} />
         </div>
@@ -147,6 +162,7 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
       <div className="mesa-1v1">
         <Asiento j={j1} {...asientoProps} />
         <div className="centro-mesa-vertical">
+          <MuestraCentral muestra={estado.muestra} />
           <CartaCentral cj={cj1} jugadores={jugadores} />
           <CartaCentral cj={cj0} jugadores={jugadores} />
         </div>
@@ -205,12 +221,6 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
       {!esEspectador && estado.tengoFlor && <div className="banner-flor">🌸 ¡Tenés Flor! Podés cantarla antes de la primera baza.</div>}
 
       <div className="mesa">
-        {estado.muestra && (
-          <div className="muestra-zona">
-            <div className="mazo-tapado" />
-            <PlayingCard carta={estado.muestra} className="carta-muestra" />
-          </div>
-        )}
         {contenidoMesa}
       </div>
 
