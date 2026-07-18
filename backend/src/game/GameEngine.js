@@ -105,8 +105,15 @@ export class GameEngine {
       if (compararCartas(jugada.carta, mejor.carta, this.muestra) > 0) mejor = jugada;
     }
     const empatados = this.cartasJugadas.filter((j) => compararCartas(j.carta, mejor.carta, this.muestra) === 0);
-    const equipoGanador = empatados.length > 1 ? "parda" : this.equipoDe(mejor.jugadorId);
-    this.bazas.push({ equipoGanador });
+    const parda = empatados.length > 1;
+    const equipoGanador = parda ? "parda" : this.equipoDe(mejor.jugadorId);
+    // Guardamos las cartas de la baza y quién ganó, para poder mostrar el historial
+    // de bazas jugadas (carta ganadora encima de la perdedora) en el cliente.
+    this.bazas.push({
+      equipoGanador,
+      ganadorId: parda ? null : mejor.jugadorId,
+      jugadas: this.cartasJugadas.map((j) => ({ jugadorId: j.jugadorId, carta: j.carta })),
+    });
     this.cartasJugadas = [];
     if (this.bazas.length >= 2) this.evaluarFinDeMano();
     if (!this.manoTerminada) {
@@ -407,6 +414,11 @@ export class GameEngine {
       turno: this.jugadorActual().id,
       muestra: this.muestra,
       cartasJugadas: this.cartasJugadas,
+      bazas: this.bazas.map((b) => ({
+        equipoGanador: b.equipoGanador,
+        ganadorId: b.ganadorId ?? null,
+        jugadas: b.jugadas ?? [],
+      })),
       bazaPendiente: !!this.bazaPendiente,
       puntos: this.puntos,
       trucoNivel: this.trucoNivel,

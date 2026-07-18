@@ -8,6 +8,25 @@ const SIGUIENTE_NIVEL = { 0: "truco", 1: "retruco", 2: "vale4" };
 const ETIQUETA_ENVIDO = { envido: "Envido", "real-envido": "Real Envido", "falta-envido": "Falta Envido" };
 const nombreCanto = (nivel) => ETIQUETA_ENVIDO[nivel] || NIVEL_TEXTO[nivel] || (nivel || "").replace(/-/g, " ");
 
+// Reparte a los jugadores en un damero alrededor de la mesa: 2v2 [AB / BA],
+// 3v3 [ABA / BAB]. "Yo" quedo en la fila de abajo, mis compañeros en diagonal
+// y los rivales intercalados. Para espectador se usa el equipo A como referencia.
+function distribuirAsientos(jugadores, userId, modo, esEspectador) {
+  const equipos = { A: [], B: [] };
+  jugadores.forEach((j) => equipos[j.equipo]?.push(j));
+  const yo = esEspectador ? null : jugadores.find((j) => j.id === userId);
+  const miEquipo = yo ? yo.equipo : "A";
+  const mios = equipos[miEquipo].slice();
+  const rivales = equipos[miEquipo === "A" ? "B" : "A"].slice();
+  const yoIdx = yo ? mios.findIndex((j) => j.id === yo.id) : 0;
+  const me = mios.splice(Math.max(0, yoIdx), 1)[0]; // saco "yo"; quedan los compañeros
+  const comp = mios;
+  if (modo === "2v2") {
+    return { top: [comp[0], rivales[0]], bottom: [rivales[1], me] };
+  }
+  return { top: [comp[0], rivales[0], comp[1]], bottom: [rivales[1], me, rivales[2]] };
+}
+
 function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, jugarCarta, lobby, recogiendo, esModoEquipos }) {
   const esYo = !esEspectador && j.id === userId;
   const slots = estado.manos[j.id] || [];
@@ -56,18 +75,59 @@ function MuestraCentral({ muestra }) {
   );
 }
 
-function CentroMesa({ estado, jugadores }) {
+// Carta que jugo un jugador, ubicada justo enfrente de su asiento (modo equipos).
+function CartaFrente({ cj }) {
+  if (!cj) return <div className="carta-hueco carta-frente" />;
   return (
-    <div className="centro-mesa">
-      <MuestraCentral muestra={estado.muestra} />
-      <div className="cartas-en-mesa">
-        {estado.cartasJugadas.map((cj, i) => (
-          <div key={`${cj.carta.id}-${i}`} className="carta-jugada-anim">
-            <PlayingCard carta={cj.carta} />
-            <div className="etiqueta-jugada">{jugadores.find((j) => j.id === cj.jugadorId)?.nombre || ""}</div>
+    <div className="carta-frente carta-jugada-anim">
+      <PlayingCard carta={cj.carta} />
+    </div>
+  );
+}
+
+// Una baza ya jugada: todas las cartas apiladas con la ganadora encima de la(s)
+// perdedora(s), y debajo el jugador (1v1) o el equipo (2v2/3v3) que la ganó.
+function PilaBaza({ baza, jugadores, esUno }) {
+  const jugadas = [...(baza.jugadas || [])].sort(
+    (a, b) => (a.jugadorId === baza.ganadorId ? 1 : 0) - (b.jugadorId === baza.ganadorId ? 1 : 0)
+  );
+  const n = jugadas.length;
+  const CARTA_W = 40, CARTA_H = 61.8;
+  const offX = n > 1 ? Math.min(14, Math.floor(48 / (n - 1))) : 0;
+  const offY = n > 1 ? Math.min(12, Math.floor(40 / (n - 1))) : 0;
+  const ancho = CARTA_W + (n - 1) * offX;
+  const alto = CARTA_H + (n - 1) * offY;
+  let etiqueta;
+  if (baza.equipoGanador === "parda") etiqueta = "Parda";
+  else if (esUno) etiqueta = jugadores.find((j) => j.id === baza.ganadorId)?.nombre || "";
+  else etiqueta = `Equipo ${baza.equipoGanador}`;
+  return (
+    <div className="baza-item">
+      <div className="baza-pila" style={{ height: `${alto}px`, width: `${ancho}px` }}>
+        {jugadas.map((jg, i) => (
+          <div
+            key={jg.carta.id}
+            className={`baza-carta ${jg.jugadorId === baza.ganadorId ? "ganadora" : ""}`}
+            style={{ left: `${i * offX}px`, top: `${i * offY}px`, zIndex: i }}
+          >
+            <PlayingCard carta={jg.carta} className="carta-mini" />
           </div>
         ))}
       </div>
+      <div className="baza-ganador">{etiqueta}</div>
+    </div>
+  );
+}
+
+function HistorialBazas({ estado, jugadores, esUno }) {
+  const bazas = estado.bazas || [];
+  return (
+    <div className="historial-bazas">
+      <div className="historial-bazas-titulo">Bazas</div>
+      {bazas.length === 0 && <div className="historial-bazas-vacio">—</div>}
+      {bazas.map((b, i) => (
+        <PilaBaza key={i} baza={b} jugadores={jugadores} esUno={esUno} />
+      ))}
     </div>
   );
 }
@@ -148,8 +208,8 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
       <div className="mesa-1v1">
         {rival && <Asiento j={rival} {...asientoProps} />}
         <div className="centro-mesa-vertical">
-          <MuestraCentral muestra={estado.muestra} />
           <CartaCentral cj={cjRival} jugadores={jugadores} />
+          <MuestraCentral muestra={estado.muestra} />
           <CartaCentral cj={cjMia} jugadores={jugadores} />
         </div>
         {yo && <Asiento j={yo} {...asientoProps} />}
@@ -163,25 +223,33 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
       <div className="mesa-1v1">
         <Asiento j={j1} {...asientoProps} />
         <div className="centro-mesa-vertical">
-          <MuestraCentral muestra={estado.muestra} />
           <CartaCentral cj={cj1} jugadores={jugadores} />
+          <MuestraCentral muestra={estado.muestra} />
           <CartaCentral cj={cj0} jugadores={jugadores} />
         </div>
         <Asiento j={j0} {...asientoProps} />
       </div>
     );
   } else {
-    // Mi equipo siempre abajo, el rival siempre arriba (usa !== para nunca dejar
-    // una fila vacía por comparaciones con un equipo indefinido).
-    const equipoAbajo = esEspectador ? "A" : miEquipo;
+    // Equipos alternados en damero: 2v2 [AB / BA], 3v3 [ABA / BAB]. Yo (o el
+    // primer jugador del equipo A si soy espectador) quedo abajo, mis compañeros
+    // en diagonal y los rivales intercalados. Cada carta jugada va enfrente.
+    const { top, bottom } = distribuirAsientos(jugadores, userId, lobby.modo, esEspectador);
+    const cartaDe = (id) => estado.cartasJugadas.find((cj) => cj.jugadorId === id);
     contenidoMesa = (
-      <div className="mesa-equipos">
-        <div className="fila-equipo">
-          {jugadores.filter((j) => j.equipo !== equipoAbajo).map((j) => <Asiento key={j.id} j={j} {...asientoProps} />)}
+      <div className={`mesa-matriz matriz-${lobby.modo}`}>
+        <div className="fila-jugadores">
+          {top.map((j) => <Asiento key={j.id} j={j} {...asientoProps} />)}
         </div>
-        <CentroMesa estado={estado} jugadores={jugadores} />
-        <div className="fila-equipo">
-          {jugadores.filter((j) => j.equipo === equipoAbajo).map((j) => <Asiento key={j.id} j={j} {...asientoProps} />)}
+        <div className="fila-frente">
+          {top.map((j) => <CartaFrente key={j.id} cj={cartaDe(j.id)} />)}
+        </div>
+        <div className="franja-muestra"><MuestraCentral muestra={estado.muestra} /></div>
+        <div className="fila-frente">
+          {bottom.map((j) => <CartaFrente key={j.id} cj={cartaDe(j.id)} />)}
+        </div>
+        <div className="fila-jugadores">
+          {bottom.map((j) => <Asiento key={j.id} j={j} {...asientoProps} />)}
         </div>
       </div>
     );
@@ -221,8 +289,11 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
 
       {!esEspectador && estado.tengoFlor && <div className="banner-flor">🌸 ¡Tenés Flor! Podés cantarla antes de la primera baza.</div>}
 
-      <div className="mesa">
-        {contenidoMesa}
+      <div className="mesa-wrap">
+        <div className="mesa">
+          {contenidoMesa}
+        </div>
+        <HistorialBazas estado={estado} jugadores={jugadores} esUno={esUno} />
       </div>
 
       {!esEspectador && (cantoPendiente ? (
