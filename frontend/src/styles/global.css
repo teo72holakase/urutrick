@@ -186,7 +186,7 @@ input, select {
   flex: 0 0 132px; display: flex; flex-direction: column; gap: 0.5rem;
   position: sticky; top: 0.5rem;
 }
-.controles-izquierda:empty { display: none; }
+/* La columna mantiene su ancho aunque no haya botones: así la mesa no cambia de tamaño. */
 .controles-izquierda .btn { width: 100%; padding: 0.55rem 0.6rem; }
 
 .marcador-fila {
