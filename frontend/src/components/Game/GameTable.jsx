@@ -92,16 +92,8 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
   const miEquipo = jugadores.find((j) => j.id === userId)?.equipo;
   const cantoPendiente = estado.estadoCanto && !estado.estadoCanto.respondido;
   const puedoResponderCanto = !esEspectador && cantoPendiente && estado.estadoCanto.equipoQueResponde === miEquipo;
-  const jugadorA = jugadores?.find((j) => j.equipo === "A");
-const jugadorB = jugadores?.find((j) => j.equipo === "B");
-
-const nombreEquipoA = esUno && jugadorA 
-  ? jugadorA.nombre 
-  : "Equipo A";
-  
-const nombreEquipoB = esUno && jugadorB 
-  ? jugadorB.nombre 
-  : "Equipo B";
+  const nombreEquipoA = esUno ? (jugadores.find((j) => j.equipo === "A")?.nombre || "Equipo A") : "Equipo A";
+  const nombreEquipoB = esUno ? (jugadores.find((j) => j.equipo === "B")?.nombre || "Equipo B") : "Equipo B";
 
   function jugarCarta(cartaId) {
     if (esEspectador) return;
@@ -186,7 +178,7 @@ const nombreEquipoB = esUno && jugadorB
       </div>
       <p className="texto-suave" style={{ textAlign: "center", margin: "0 0 0.5rem" }}>
         Partida a {lobby.puntajeLimite || 30} tantos
-        {estado.historialManos.length > 0 && (
+        {(estado.historialManos || []).length > 0 && (
           <> · <button className="link-historial" onClick={() => setMostrarHistorial((v) => !v)}>
             {mostrarHistorial ? "ocultar" : "ver"} historial de manos
           </button></>
@@ -194,7 +186,7 @@ const nombreEquipoB = esUno && jugadorB
       </p>
       {mostrarHistorial && (
         <div className="panel historial-manos">
-          {estado.historialManos.slice().reverse().map((h) => (
+          {(estado.historialManos || []).slice().reverse().map((h) => (
             <div key={h.numero} className="fila-historial">
               Mano {h.numero}: ganó {esUno ? (h.ganador === "A" ? nombreEquipoA : nombreEquipoB) : `equipo ${h.ganador}`} (+{h.puntos})
             </div>
