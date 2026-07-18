@@ -192,7 +192,11 @@ input, select {
 
 .mesa-1v1 {
   display: flex; flex-direction: column; justify-content: space-between;
-  min-height: 55vh; padding: 3.5rem 0 1rem;
+  min-height: 65vh; padding: 3.5rem 0 1rem; gap: 1rem;
+}
+.centro-mesa-vertical {
+  display: flex; flex-direction: column; align-items: center; gap: 1.2rem;
+  flex: 1; justify-content: center;
 }
 .mesa-equipos {
   display: flex; flex-direction: column; justify-content: space-between;
@@ -245,7 +249,7 @@ input, select {
   .carta-muestra { width: 38px; height: 58.7px; margin-left: 26px; }
   .muestra-zona { top: 6px; left: 8px; }
   .mesa-1v1, .mesa-equipos { padding-top: 3.2rem; }
-  .mesa-1v1 { min-height: 48vh; }
+  .mesa-1v1 { min-height: 58vh; }
   .mesa-equipos { min-height: 52vh; }
   .fila-equipo { gap: 0.6rem; }
   .nombre-jugador { font-size: 0.78rem; }

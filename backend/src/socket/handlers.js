@@ -232,6 +232,15 @@ export function registrarHandlers(io, socket) {
     } catch (e) { cb?.({ ok: false, error: e.message }); }
   });
 
+  socket.on("juego:irse-al-mazo", ({ lobbyId }, cb) => {
+    try {
+      const lobby = lobbyManager.get(lobbyId);
+      lobby.engine.irseAlMazo(userId);
+      emitirEstado(io, lobby);
+      cb?.({ ok: true });
+    } catch (e) { cb?.({ ok: false, error: e.message }); }
+  });
+
   socket.on("lobby:salir", ({ lobbyId }) => {
     lobbyManager.salir(lobbyId, userId);
     io.emit("lobby:actualizado", lobbyManager.listarPublicos());

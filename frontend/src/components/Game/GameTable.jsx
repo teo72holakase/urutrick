@@ -3,11 +3,8 @@ import { socket } from "../../lib/socket";
 import PlayingCard from "./PlayingCard";
 import TurnTimer from "./TurnTimer";
 
-// IMPORTANTE: Asiento y CentroMesa van FUERA de GameTable (a nivel de módulo).
-// Si se declaran dentro del cuerpo de GameTable, React las trata como un tipo de
-// componente NUEVO en cada re-render (incluida la cuenta regresiva de 6s, que
-// actualiza estado cada segundo) y remonta TODO el árbol de cartas de cero,
-// repitiendo la animación de reparto una y otra vez. Sacarlas afuera evita eso.
+const NIVEL_TEXTO = { truco: "Truco", retruco: "Retruco", vale4: "Vale 4" };
+const SIGUIENTE_NIVEL = { 0: "truco", 1: "retruco", 2: "vale4" };
 
 function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, jugarCarta, lobby, recogiendo, esModoEquipos }) {
   const esYo = !esEspectador && j.id === userId;
@@ -22,19 +19,11 @@ function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, j
       </div>
       <div className={`fila-cartas ${recogiendo ? "recogiendo" : ""}`}>
         {slots.map((slot, i) => {
-          // slot = {jugada:true} -> hueco invisible (ya se jugó esa carta, no achica la fila)
-          if (slot && slot.jugada) {
-            return <div key={`hueco-${j.id}-${i}`} className="carta-hueco" />;
-          }
-          const carta = slot; // carta real, o null (oculta del rival)
+          if (slot && slot.jugada) return <div key={`hueco-${j.id}-${i}`} className="carta-hueco" />;
+          const carta = slot;
           return (
             <div key={carta?.id || `${j.id}-${i}`} className="carta-repartida" style={{ animationDelay: `${i * 0.08}s` }}>
-              <PlayingCard
-                carta={carta}
-                tapada={!carta}
-                jugable={esYo && esMiTurno && !cantoPendiente && !!carta}
-                onClick={() => carta && jugarCarta(carta.id)}
-              />
+              <PlayingCard carta={carta} tapada={!carta} jugable={esYo && esMiTurno && !cantoPendiente && !!carta} onClick={() => carta && jugarCarta(carta.id)} />
             </div>
           );
         })}
@@ -43,18 +32,26 @@ function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, j
   );
 }
 
+function CartaCentral({ cj, jugadores }) {
+  if (!cj) return <div className="carta-hueco" />;
+  const nombreJ = jugadores.find((j) => j.id === cj.jugadorId)?.nombre || "";
+  return (
+    <div className="carta-jugada-anim">
+      <PlayingCard carta={cj.carta} />
+      <div className="etiqueta-jugada">{nombreJ}</div>
+    </div>
+  );
+}
+
 function CentroMesa({ estado, jugadores }) {
   return (
     <div className="centro-mesa">
-      {estado.cartasJugadas.map((cj, i) => {
-        const nombreJ = jugadores.find((j) => j.id === cj.jugadorId)?.nombre || "";
-        return (
-          <div key={`${cj.carta.id}-${i}`} className="carta-jugada-anim">
-            <PlayingCard carta={cj.carta} />
-            <div className="etiqueta-jugada">{nombreJ}</div>
-          </div>
-        );
-      })}
+      {estado.cartasJugadas.map((cj, i) => (
+        <div key={`${cj.carta.id}-${i}`} className="carta-jugada-anim">
+          <PlayingCard carta={cj.carta} />
+          <div className="etiqueta-jugada">{jugadores.find((j) => j.id === cj.jugadorId)?.nombre || ""}</div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -89,22 +86,24 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
   const jugadores = lobby.jugadores;
   const esUno = lobby.modo === "1v1";
   const esMiTurno = !esEspectador && estado.turno === userId;
-  const miEquipo = jugadores.find((j) => j.id === userId)?.equipo;
+  const miEquipo = jugadores.find((j) => j.id === userId)?.equipo || "A";
   const cantoPendiente = estado.estadoCanto && !estado.estadoCanto.respondido;
   const puedoResponderCanto = !esEspectador && cantoPendiente && estado.estadoCanto.equipoQueResponde === miEquipo;
   const nombreEquipoA = esUno ? (jugadores.find((j) => j.equipo === "A")?.nombre || "Equipo A") : "Equipo A";
   const nombreEquipoB = esUno ? (jugadores.find((j) => j.equipo === "B")?.nombre || "Equipo B") : "Equipo B";
+  const puedoCantarTruco = !esEspectador && !cantoPendiente && estado.trucoNivel < 3 && estado.trucoPalabra === miEquipo;
+  const puedoIrseAlMazo = !esEspectador && !cantoPendiente && !estado.manoTerminada;
 
-  function jugarCarta(cartaId) {
-    if (esEspectador) return;
-    socket.emit("juego:jugar-carta", { lobbyId: lobby.id, cartaId });
-  }
+  function jugarCarta(cartaId) { if (!esEspectador) socket.emit("juego:jugar-carta", { lobbyId: lobby.id, cartaId }); }
   function cantarTruco() { socket.emit("juego:cantar-truco", { lobbyId: lobby.id }); }
   function responderTruco(q) { socket.emit("juego:responder-truco", { lobbyId: lobby.id, quiero: q }); }
   function cantarEnvido(tipo) { socket.emit("juego:cantar-envido", { lobbyId: lobby.id, tipo }); }
   function responderEnvido(q) { socket.emit("juego:responder-envido", { lobbyId: lobby.id, quiero: q }); }
   function cantarFlor(tipo) { socket.emit("juego:cantar-flor", { lobbyId: lobby.id, tipo }); }
   function responderFlor(q) { socket.emit("juego:responder-flor", { lobbyId: lobby.id, quiero: q }); }
+  function irseAlMazo() { socket.emit("juego:irse-al-mazo", { lobbyId: lobby.id }); }
+  function escalarTruco() { responderTruco(true); cantarTruco(); }
+  function escalarEnvido(tipo) { responderEnvido(true); cantarEnvido(tipo); }
 
   function responder(q) {
     const t = estado.estadoCanto.tipo;
@@ -128,36 +127,44 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
   if (esUno && !esEspectador) {
     const rival = jugadores.find((j) => j.id !== userId);
     const yo = jugadores.find((j) => j.id === userId);
+    const cjRival = estado.cartasJugadas.find((cj) => cj.jugadorId === rival?.id);
+    const cjMia = estado.cartasJugadas.find((cj) => cj.jugadorId === yo?.id);
     contenidoMesa = (
       <div className="mesa-1v1">
         {rival && <Asiento j={rival} {...asientoProps} />}
-        <CentroMesa estado={estado} jugadores={jugadores} />
+        <div className="centro-mesa-vertical">
+          <CartaCentral cj={cjRival} jugadores={jugadores} />
+          <CartaCentral cj={cjMia} jugadores={jugadores} />
+        </div>
         {yo && <Asiento j={yo} {...asientoProps} />}
       </div>
     );
   } else if (esUno && esEspectador) {
+    const [j0, j1] = jugadores;
+    const cj0 = estado.cartasJugadas.find((cj) => cj.jugadorId === j0?.id);
+    const cj1 = estado.cartasJugadas.find((cj) => cj.jugadorId === j1?.id);
     contenidoMesa = (
       <div className="mesa-1v1">
-        <Asiento j={jugadores[1]} {...asientoProps} />
-        <CentroMesa estado={estado} jugadores={jugadores} />
-        <Asiento j={jugadores[0]} {...asientoProps} />
+        <Asiento j={j1} {...asientoProps} />
+        <div className="centro-mesa-vertical">
+          <CartaCentral cj={cj1} jugadores={jugadores} />
+          <CartaCentral cj={cj0} jugadores={jugadores} />
+        </div>
+        <Asiento j={j0} {...asientoProps} />
       </div>
     );
   } else {
-    // Mi equipo siempre abajo (cerca mío), el rival siempre arriba — igual para
-    // cualquier jugador, así ambos lados ven el mismo tipo de tablero (antes
-    // "Equipo B" quedaba fijo arriba para todos, y por eso un lado veía su
-    // propia fila de reversos distinto que el otro).
-    const abajo = esEspectador ? "A" : miEquipo;
-    const arriba = abajo === "A" ? "B" : "A";
+    // Mi equipo siempre abajo, el rival siempre arriba (usa !== para nunca dejar
+    // una fila vacía por comparaciones con un equipo indefinido).
+    const equipoAbajo = esEspectador ? "A" : miEquipo;
     contenidoMesa = (
       <div className="mesa-equipos">
         <div className="fila-equipo">
-          {jugadores.filter((j) => j.equipo === arriba).map((j) => <Asiento key={j.id} j={j} {...asientoProps} />)}
+          {jugadores.filter((j) => j.equipo !== equipoAbajo).map((j) => <Asiento key={j.id} j={j} {...asientoProps} />)}
         </div>
         <CentroMesa estado={estado} jugadores={jugadores} />
         <div className="fila-equipo">
-          {jugadores.filter((j) => j.equipo === abajo).map((j) => <Asiento key={j.id} j={j} {...asientoProps} />)}
+          {jugadores.filter((j) => j.equipo === equipoAbajo).map((j) => <Asiento key={j.id} j={j} {...asientoProps} />)}
         </div>
       </div>
     );
@@ -188,15 +195,14 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
         <div className="panel historial-manos">
           {(estado.historialManos || []).slice().reverse().map((h) => (
             <div key={h.numero} className="fila-historial">
-              Mano {h.numero}: ganó {esUno ? (h.ganador === "A" ? nombreEquipoA : nombreEquipoB) : `equipo ${h.ganador}`} (+{h.puntos})
+              {esUno ? (h.ganador === "A" ? nombreEquipoA : nombreEquipoB) : `Equipo ${h.ganador}`} ganó la mano +{h.puntos} puntos
+              {h.detalle?.length > 0 && ` (${h.detalle.map((d) => `+${d.puntos} de ${d.motivo}`).join(" y ")})`}
             </div>
           ))}
         </div>
       )}
 
-      {!esEspectador && estado.tengoFlor && (
-        <div className="banner-flor">🌸 ¡Tenés Flor! Podés cantarla cuando quieras antes de la primera baza.</div>
-      )}
+      {!esEspectador && estado.tengoFlor && <div className="banner-flor">🌸 ¡Tenés Flor! Podés cantarla antes de la primera baza.</div>}
 
       <div className="mesa">
         {estado.muestra && (
@@ -215,6 +221,14 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
             <div className="acciones-canto">
               <button className="btn" onClick={() => responder(true)}>Quiero</button>
               <button className="btn btn-secundario" onClick={() => responder(false)}>No quiero</button>
+              {estado.estadoCanto.tipo === "truco" && estado.trucoNivel < 3 && (
+                <button className="btn" onClick={escalarTruco}>{NIVEL_TEXTO[SIGUIENTE_NIVEL[estado.trucoNivel]]}</button>
+              )}
+              {estado.estadoCanto.tipo === "envido" && estado.estadoCanto.nivel !== "falta-envido" && (
+                <button className="btn" onClick={() => escalarEnvido(estado.estadoCanto.nivel === "envido" ? "real-envido" : "falta-envido")}>
+                  {estado.estadoCanto.nivel === "envido" ? "Real Envido" : "Falta Envido"}
+                </button>
+              )}
             </div>
           ) : (
             <p className="texto-suave">Esperando respuesta del rival...</p>
@@ -222,16 +236,11 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
         </div>
       ) : (
         <div className="acciones-canto">
-          <button className="btn" onClick={cantarTruco}>Truco</button>
-          {!estado.envidoBloqueado && (
-            <>
-              <button className="btn" onClick={() => cantarEnvido("envido")}>Envido</button>
-              <button className="btn" onClick={() => cantarEnvido("real-envido")}>Real Envido</button>
-              <button className="btn" onClick={() => cantarEnvido("falta-envido")}>Falta Envido</button>
-            </>
-          )}
+          {puedoCantarTruco && <button className="btn" onClick={cantarTruco}>{NIVEL_TEXTO[SIGUIENTE_NIVEL[estado.trucoNivel]]}</button>}
+          {estado.envidoDisponible && <button className="btn" onClick={() => cantarEnvido("envido")}>Envido</button>}
           {estado.tengoFlor && <button className="btn" onClick={() => cantarFlor("flor")}>🌸 Flor</button>}
           {estado.tengoFlor && <button className="btn" onClick={() => cantarFlor("contraflor")}>Contraflor</button>}
+          {puedoIrseAlMazo && <button className="btn btn-secundario" onClick={irseAlMazo}>Irse al mazo</button>}
         </div>
       ))}
 
