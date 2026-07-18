@@ -32,11 +32,22 @@ export default function App() {
   useEffect(() => {
     function onEstado(e) { setEstadoJuego(e); }
     function onFin(f) { setFinPartida(f); }
+    // Importante: esto actualiza lobby.jugadores en vivo. Sin esto, el jugador que
+    // CREÓ la mesa se quedaba con el lobby "viejo" (con solo él adentro) para
+    // siempre, porque WaitingRoom guardaba los jugadores actualizados en un estado
+    // propio que nunca subía hasta acá — y al arrancar la partida, GameTable
+    // terminaba usando ese lobby viejo, sin el rival (no se le veían sus cartas,
+    // ni el dorso, ni las que jugaba).
+    function onJugadores(jugadores) {
+      setLobby((prev) => (prev ? { ...prev, jugadores } : prev));
+    }
     socket.on("estado", onEstado);
     socket.on("fin-partida", onFin);
+    socket.on("lobby:jugadores", onJugadores);
     return () => {
       socket.off("estado", onEstado);
       socket.off("fin-partida", onFin);
+      socket.off("lobby:jugadores", onJugadores);
     };
   }, []);
 

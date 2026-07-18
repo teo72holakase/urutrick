@@ -174,8 +174,9 @@ input, select {
 .texto-suave { color: var(--texto-suave); }
 
 .muestra-central {
-  display: flex; align-items: center; justify-content: center;
-  margin: 0 0 0.6rem;
+  display: flex; align-items: center; justify-content: flex-start;
+  width: 100%; margin: 0 0 0.6rem;
+  padding-left: 6%;
 }
 .mazo-tapado-grande {
   width: 64px; height: 99px; border-radius: 7px;
