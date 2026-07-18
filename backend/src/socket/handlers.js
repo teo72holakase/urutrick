@@ -100,23 +100,32 @@ function armarTimerJugada(io, lobby) {
   timers.get(lobby.id)?.cancelar();
   const timer = new TurnTimer(TIEMPOS.jugarCarta, () => {
     try {
-      if (!lobby.engine) return;
-      const ec = lobby.engine.estadoCanto;
+      const engine = lobby.engine;
+      if (!engine) return;
+      // No corresponde jugar/responder por timeout si la mano terminó, hay una baza
+      // pendiente de resolver o estamos en la revelación del envido.
+      if (engine.manoTerminada || engine.bazaPendiente || engine.revelacionEnvido) return;
+      const ec = engine.estadoCanto;
       if (ec && !ec.respondido) {
         // Responde automáticamente "no quiero" en nombre del equipo que debe responder
         // (no necesariamente el del turno de la carta).
-        const respondedor = lobby.jugadores.find((j) => lobby.engine.equipoDe(j.id) === ec.equipoQueResponde)?.id
-          || lobby.engine.jugadorActual().id;
-        if (ec.tipo === "truco") lobby.engine.responderTruco(respondedor, false);
-        else if (ec.tipo === "flor") lobby.engine.responderFlor(respondedor, false);
-        else lobby.engine.responderEnvido(respondedor, false);
+        const respondedor = lobby.jugadores.find((j) => engine.equipoDe(j.id) === ec.equipoQueResponde)?.id
+          || engine.jugadorActual()?.id;
+        if (!respondedor) return;
+        if (ec.tipo === "truco") engine.responderTruco(respondedor, false);
+        else if (ec.tipo === "flor") engine.responderFlor(respondedor, false);
+        else engine.responderEnvido(respondedor, false);
       } else {
-        lobby.engine.jugarCartaAleatoria(lobby.engine.jugadorActual().id);
+        const actual = engine.jugadorActual();
+        if (!actual) return;
+        engine.jugarCartaAleatoria(actual.id);
       }
       emitirEstado(io, lobby);
-      if (lobby.engine.bazaPendiente) {
+      if (engine.revelacionEnvido) {
+        programarFinRevelacionEnvido(io, lobby);
+      } else if (engine.bazaPendiente) {
         programarResolucionBaza(io, lobby);
-      } else if (!lobby.engine.manoTerminada) {
+      } else if (!engine.manoTerminada) {
         armarTimerJugada(io, lobby);
       }
     } catch (e) {
