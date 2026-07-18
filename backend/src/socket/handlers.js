@@ -1,16 +1,20 @@
 import { LobbyManager } from "../game/LobbyManager.js";
 import { TurnTimer, TIEMPOS } from "../game/Timer.js";
 import { guardarHistorial } from "../lib/appwrite.js";
+import { registrarMano, registrarPartida, leaderboard } from "../lib/stats.js";
 
 const lobbyManager = new LobbyManager();
 const timers = new Map(); // lobbyId -> TurnTimer
 const sigManoTimers = new Map(); // lobbyId -> setTimeout handle
 const bazaTimers = new Map(); // lobbyId -> setTimeout handle (delay antes de recoger la baza)
 const revelTimers = new Map(); // lobbyId -> setTimeout handle (fin de la revelación de envido)
+const abandonoTimers = new Map(); // lobbyId -> setTimeout handle (cierre por quedar un solo jugador)
 const conexiones = new Map(); // userId -> socket.id actual
 
 const DELAY_RESOLVER_BAZA = 2000; // ms que quedan las cartas jugadas visibles en el centro de la mesa antes de recoger la baza
 const DELAY_CANTO_ENVIDO = 2000; // ms entre cada "canto de tantos" sobre la cabeza de cada jugador
+const DELAY_PRE_CANTO = 1800; // ms de pausa tras el "quiero" antes de arrancar a cantar los tantos
+const DELAY_ABANDONO = 7000; // ms que una mesa iniciada aguanta con un solo jugador conectado antes de darle la victoria
 
 function emitirA(io, userId, evento, payload) {
   const sid = conexiones.get(userId);
@@ -24,6 +28,7 @@ function programarSiguienteMano(io, lobby) {
     try {
       if (!lobby.engine) return; // la mesa pudo limpiarse mientras esperaba
       lobby.engine.siguienteMano();
+      lobby._manoContada = false; // arranca una mano nueva: habilita contar su ganador
       emitirEstado(io, lobby);
       armarTimerJugada(io, lobby);
     } catch (e) {
@@ -31,6 +36,56 @@ function programarSiguienteMano(io, lobby) {
     }
   }, 6000);
   sigManoTimers.set(lobby.id, handle);
+}
+
+// Cierre de partida (por puntos o por abandono): avisa a la mesa, corta timers,
+// registra estadísticas y libera la mesa. Idempotente vía lobby.finalizada.
+function finalizarPartida(io, lobby, ganador) {
+  if (lobby.finalizada) return;
+  lobby.finalizada = true;
+  io.to(lobby.id).emit("fin-partida", { ganador, puntos: lobby.engine?.puntos || { A: 0, B: 0 } });
+  timers.get(lobby.id)?.cancelar();
+  const ta = abandonoTimers.get(lobby.id);
+  if (ta) { clearTimeout(ta); abandonoTimers.delete(lobby.id); }
+  registrarPartida(lobby, ganador);
+  guardarHistorial(lobby, ganador).catch((e) => console.error("No se pudo guardar historial:", e.message));
+  io.emit("lobby:actualizado", lobbyManager.listarPublicos());
+  io.emit("stats:actualizado", leaderboard());
+  // Si nadie sale explícitamente (cierran la pestaña), igual liberamos la mesa a los 5 min.
+  setTimeout(() => {
+    lobbyManager.eliminar(lobby.id);
+    io.emit("lobby:actualizado", lobbyManager.listarPublicos());
+  }, 5 * 60 * 1000);
+}
+
+// Si una mesa iniciada queda con un solo jugador conectado, tras DELAY_ABANDONO
+// se cierra la partida y gana el que quedó. Se cancela si alguien reconecta.
+function verificarAbandono(io, lobby) {
+  if (!lobby) return;
+  if (!lobby.iniciado || !lobby.engine || lobby.finalizada) {
+    const t = abandonoTimers.get(lobby.id);
+    if (t) { clearTimeout(t); abandonoTimers.delete(lobby.id); }
+    return;
+  }
+  const conectados = lobby.jugadores.filter((j) => conexiones.has(j.id));
+  if (conectados.length === 1 && lobby.jugadores.length >= 2) {
+    if (abandonoTimers.has(lobby.id)) return;
+    const handle = setTimeout(() => {
+      abandonoTimers.delete(lobby.id);
+      if (!lobby.iniciado || !lobby.engine || lobby.finalizada) return;
+      const quedan = lobby.jugadores.filter((j) => conexiones.has(j.id));
+      if (quedan.length !== 1) return;
+      finalizarPartida(io, lobby, lobby.engine.equipoDe(quedan[0].id));
+    }, DELAY_ABANDONO);
+    abandonoTimers.set(lobby.id, handle);
+  } else {
+    const t = abandonoTimers.get(lobby.id);
+    if (t) { clearTimeout(t); abandonoTimers.delete(lobby.id); }
+  }
+}
+
+function lobbiesDeJugador(userId) {
+  return [...lobbyManager.lobbies.values()].filter((l) => l.jugadores.some((j) => j.id === userId));
 }
 
 // Cuando ya se jugaron todas las cartas de la baza, primero se emite el estado
@@ -58,12 +113,20 @@ function programarResolucionBaza(io, lobby) {
 function programarFinRevelacionEnvido(io, lobby) {
   if (revelTimers.has(lobby.id)) return;
   const cantidad = lobby.engine.revelacionEnvido?.orden?.length || 1;
-  const dur = cantidad * DELAY_CANTO_ENVIDO + 1200;
+  // El cliente hace una pausa inicial (DELAY_PRE_CANTO) antes de cantar el primer
+  // tanto; el timer del server debe contemplarla para no cortar la animación.
+  const dur = DELAY_PRE_CANTO + cantidad * DELAY_CANTO_ENVIDO + 1200;
   const handle = setTimeout(() => {
     revelTimers.delete(lobby.id);
     try {
       if (!lobby.engine) return;
       lobby.engine.finalizarRevelacionEnvido();
+      // Si el envido cierra la partida, se deja ver toda la animación y recién a
+      // los 2s se anuncia el ganador de la partida.
+      if (lobby.engine.finDePartida()) {
+        setTimeout(() => { if (lobby.engine) emitirEstado(io, lobby); }, 2000);
+        return;
+      }
       emitirEstado(io, lobby);
       if (!lobby.engine.manoTerminada) armarTimerJugada(io, lobby);
     } catch (e) {
@@ -80,17 +143,17 @@ function emitirEstado(io, lobby) {
   for (const e of lobby.espectadores) {
     emitirA(io, e.id, "estado", lobby.engine.estadoPublico(e.id, true));
   }
+  // Durante la revelación de tantos (canto del envido) no se cierra la partida ni
+  // se pasa de mano: se deja correr toda la animación primero.
+  if (lobby.engine.revelacionEnvido) return;
+  // Cuenta la mano ganada una sola vez, apenas termina (antes de saber si cierra la partida).
+  if (lobby.engine.manoTerminada && lobby.engine.ganadorMano && !lobby._manoContada) {
+    lobby._manoContada = true;
+    registrarMano(lobby, lobby.engine.ganadorMano);
+  }
   const ganador = lobby.engine.finDePartida();
   if (ganador) {
-    io.to(lobby.id).emit("fin-partida", { ganador, puntos: lobby.engine.puntos });
-    timers.get(lobby.id)?.cancelar();
-    guardarHistorial(lobby, ganador).catch((e) => console.error("No se pudo guardar historial:", e.message));
-    io.emit("lobby:actualizado", lobbyManager.listarPublicos());
-    // Si nadie sale explícitamente (cierran la pestaña), igual liberamos la mesa a los 5 min.
-    setTimeout(() => {
-      lobbyManager.eliminar(lobby.id);
-      io.emit("lobby:actualizado", lobbyManager.listarPublicos());
-    }, 5 * 60 * 1000);
+    finalizarPartida(io, lobby, ganador);
   } else if (lobby.engine.manoTerminada) {
     programarSiguienteMano(io, lobby);
   }
@@ -148,8 +211,12 @@ export function registrarHandlers(io, socket) {
   const userId = socket.handshake.auth?.userId || socket.id;
   socket.data.userId = userId;
   conexiones.set(userId, socket.id);
+  // Al (re)conectar, cancela un posible cierre por abandono de sus mesas.
+  for (const l of lobbiesDeJugador(userId)) verificarAbandono(io, l);
 
   socket.on("lobby:listar", (cb) => cb(lobbyManager.listarPublicos()));
+
+  socket.on("stats:leaderboard", (cb) => cb?.(leaderboard()));
 
   // Info de una mesa puntual por su ID (para entrar directo por urutrick.vercel.app/{id})
   socket.on("lobby:info", (lobbyId, cb) => {
@@ -329,5 +396,7 @@ export function registrarHandlers(io, socket) {
   // Solo se libera el asiento con el evento explícito "lobby:salir".
   socket.on("disconnect", () => {
     if (conexiones.get(userId) === socket.id) conexiones.delete(userId);
+    // Si dejó una mesa iniciada con un solo jugador conectado, arranca el conteo de abandono.
+    for (const l of lobbiesDeJugador(userId)) verificarAbandono(io, l);
   });
 }

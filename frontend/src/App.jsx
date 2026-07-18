@@ -133,7 +133,7 @@ export default function App() {
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "1rem" }}>
       <header className="header-app">
         <h1 className="titulo">
-          <img src="/urutrick.png" alt="" className="titulo-icono" /> UruTrick
+          <img src="/urutrick.png" alt="" className="titulo-icono titulo-icono-grande" /> UruTrick
         </h1>
         <div className="header-acciones">
           <ThemeToggle />

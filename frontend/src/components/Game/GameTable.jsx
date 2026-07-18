@@ -27,9 +27,13 @@ function distribuirAsientos(jugadores, userId, modo, esEspectador) {
   return { top: [comp[0], rivales[0], comp[1]], bottom: [rivales[1], me, rivales[2]] };
 }
 
-function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, jugarCarta, lobby, recogiendo, esModoEquipos, bloqueado, cantoPunto }) {
+function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, jugarCarta, lobby, recogiendo, esModoEquipos, bloqueado, cantoPunto, turnoKey, mazoAnim }) {
   const esYo = !esEspectador && j.id === userId;
   const slots = estado.manos[j.id] || [];
+  // Turno activo para jugar carta (no durante baza pendiente, mano terminada,
+  // revelación de tantos ni con un canto sin responder): muestra la barrita.
+  const esTurnoJugar = !estado.bazaPendiente && !estado.manoTerminada && !estado.revelacionEnvido && !cantoPendiente && estado.turno === j.id;
+  const alMazo = mazoAnim && mazoAnim.equipo === j.equipo;
   return (
     <div className={`asiento ${esYo ? "asiento-yo" : ""}`}>
       {cantoPunto && (
@@ -43,12 +47,17 @@ function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, j
         {lobby.jugadores[estado.manoIndex]?.id === j.id && <span className="icono-mano" title="Es mano">M</span>}
         {!estado.bazaPendiente && estado.turno === j.id && <span className="icono-turno" title="Turno">👉</span>}
       </div>
-      <div className={`fila-cartas ${recogiendo ? "recogiendo" : ""}`}>
+      {esTurnoJugar && (
+        <div className="barra-turno" title="Tiempo para jugar">
+          <div key={turnoKey} className="barra-turno-fill" />
+        </div>
+      )}
+      <div className={`fila-cartas ${recogiendo ? "recogiendo" : ""} ${alMazo ? "al-mazo" : ""}`}>
         {slots.map((slot, i) => {
           if (slot && slot.jugada) return <div key={`hueco-${j.id}-${i}`} className="carta-hueco" />;
           const carta = slot;
           return (
-            <div key={carta?.id || `${j.id}-${i}`} className="carta-repartida" style={{ animationDelay: `${i * 0.08}s` }}>
+            <div key={carta?.id || `${j.id}-${i}`} className="carta-repartida" style={{ animationDelay: `${i * 0.13}s` }}>
               <PlayingCard carta={carta} tapada={!carta} jugable={esYo && esMiTurno && !cantoPendiente && !bloqueado && !!carta} onClick={() => carta && jugarCarta(carta.id)} />
             </div>
           );
@@ -144,8 +153,10 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
   const [revelCount, setRevelCount] = useState(0);
   const [accion, setAccion] = useState(null); // burbuja de acción sobre un jugador
   const [aviso, setAviso] = useState(null); // mensaje temporal arriba
+  const [mazoAnim, setMazoAnim] = useState(null); // animación de cartas yéndose al mazo
   const manoIndexRef = useRef(null);
   const cuentaRef = useRef(null);
+  const revelIntRef = useRef(null);
 
   // Burbuja de acción ("Quiero", "Truco", "Me voy al mazo", "Flor"...) visible
   // para todos durante ~3s sobre la cabeza del jugador que la emitió.
@@ -154,6 +165,15 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
     if (!accionSrc) return;
     setAccion(accionSrc);
     const t = setTimeout(() => setAccion((a) => (a?.id === accionSrc.id ? null : a)), 3000);
+    return () => clearTimeout(t);
+  }, [accionSrc?.id]);
+
+  // Al irse alguien al mazo, sus cartas (las de su equipo) "vuelan" hacia el mazo.
+  useEffect(() => {
+    if (!accionSrc || accionSrc.texto !== "Me voy al mazo") return;
+    const equipo = lobby.jugadores.find((j) => j.id === accionSrc.jugadorId)?.equipo;
+    setMazoAnim({ id: accionSrc.id, equipo });
+    const t = setTimeout(() => setMazoAnim((m) => (m?.id === accionSrc.id ? null : m)), 1200);
     return () => clearTimeout(t);
   }, [accionSrc?.id]);
 
@@ -166,19 +186,25 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
     return () => clearTimeout(t);
   }, [avisoSrc?.id]);
 
-  // Canto de tantos: cada jugador de la secuencia "habla" una burbuja cada 2s.
+  // Canto de tantos: tras el "quiero" hay una pausa de ~1.8s (nadie canta) y
+  // recién ahí cada jugador de la secuencia "habla" una burbuja cada 2s.
   const revel = estado?.revelacionEnvido || null;
   useEffect(() => {
+    clearInterval(revelIntRef.current);
     if (!revel) { setRevelCount(0); return; }
     const total = (revel.orden || []).length;
-    let i = 1;
-    setRevelCount(1);
-    const int = setInterval(() => {
-      i += 1;
-      setRevelCount(i);
-      if (i >= total) clearInterval(int);
-    }, 2000);
-    return () => clearInterval(int);
+    setRevelCount(0);
+    let i = 0;
+    const arranque = setTimeout(() => {
+      i = 1;
+      setRevelCount(1);
+      revelIntRef.current = setInterval(() => {
+        i += 1;
+        setRevelCount(i);
+        if (i >= total) clearInterval(revelIntRef.current);
+      }, 2000);
+    }, 1800);
+    return () => { clearTimeout(arranque); clearInterval(revelIntRef.current); };
   }, [revel?.id]);
 
   useEffect(() => {
@@ -232,8 +258,8 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
   const nombreEquipoA = esUno ? (jugadores.find((j) => j.equipo === "A")?.nombre || "Equipo A") : "Equipo A";
   const nombreEquipoB = esUno ? (jugadores.find((j) => j.equipo === "B")?.nombre || "Equipo B") : "Equipo B";
   const nombreEquipo = (eq) => (eq === "A" ? nombreEquipoA : eq === "B" ? nombreEquipoB : eq);
-  const puedoCantarTruco = !esEspectador && !cantoPendiente && !estado.bazaPendiente && !estado.manoTerminada && estado.trucoNivel < 3 && estado.trucoPalabra === miEquipo;
-  const puedoIrseAlMazo = !esEspectador && !cantoPendiente && !estado.bazaPendiente && !estado.manoTerminada;
+  const puedoCantarTruco = !esEspectador && !cantoPendiente && !enRevelacion && !estado.bazaPendiente && !estado.manoTerminada && estado.trucoNivel < 3 && estado.trucoPalabra === miEquipo;
+  const puedoIrseAlMazo = !esEspectador && !cantoPendiente && !enRevelacion && !estado.bazaPendiente && !estado.manoTerminada;
   const revelDone = enRevelacion && revelCount >= ((estado.revelacionEnvido.orden || []).length);
 
   function jugarCarta(cartaId) { if (!esEspectador) socket.emit("juego:jugar-carta", { lobbyId: lobby.id, cartaId }); }
@@ -263,7 +289,9 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
     );
   }
 
-  const asientoProps = { estado, userId, esEspectador, esMiTurno, cantoPendiente, jugarCarta, lobby, recogiendo, esModoEquipos: !esUno, bloqueado: enRevelacion };
+  // Cambia en cada jugada para reiniciar la barrita de tiempo del turno.
+  const turnoKey = `${estado.turno}-${estado.manoIndex}-${estado.bazas.length}-${estado.cartasJugadas.length}`;
+  const asientoProps = { estado, userId, esEspectador, esMiTurno, cantoPendiente, jugarCarta, lobby, recogiendo, esModoEquipos: !esUno, bloqueado: enRevelacion, turnoKey, mazoAnim };
   let contenidoMesa;
   if (esUno && !esEspectador) {
     const rival = jugadores.find((j) => j.id !== userId);
@@ -379,30 +407,33 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
       {/* Controles a la izquierda + mesa a la derecha */}
       <div className="mesa-y-controles">
         <div className="controles-izquierda">
-          {!esEspectador && !enRevelacion && !estado.manoTerminada && (cantoPendiente ? (
-            puedoResponderCanto && (
-              <>
-                <button className="btn" onClick={() => responder(true)}>Quiero</button>
-                <button className="btn btn-secundario" onClick={() => responder(false)}>No quiero</button>
-                {estado.estadoCanto.tipo === "truco" && estado.trucoNivel < 3 && (
-                  <button className="btn" onClick={escalarTruco}>{NIVEL_TEXTO[SIGUIENTE_NIVEL[estado.trucoNivel]]}</button>
-                )}
-                {estado.estadoCanto.tipo === "envido" && (estado.estadoCanto.siguientes || []).map((t) => (
-                  <button key={t} className="btn" onClick={() => cantarEnvido(t)}>{ETIQUETA_ENVIDO[t]}</button>
-                ))}
-              </>
-            )
-          ) : (
+          {/* Respuestas a un canto: aparecen sólo cuando me toca responder. */}
+          {!esEspectador && !enRevelacion && !estado.manoTerminada && cantoPendiente && puedoResponderCanto && (
             <>
-              {puedoCantarTruco && <button className="btn" onClick={cantarTruco}>{NIVEL_TEXTO[SIGUIENTE_NIVEL[estado.trucoNivel]]}</button>}
-              {estado.envidoDisponible && <button className="btn" onClick={() => cantarEnvido("envido")}>Envido</button>}
-              {estado.envidoDisponible && <button className="btn" onClick={() => cantarEnvido("falta-envido")}>Falta Envido</button>}
+              <button className="btn" onClick={() => responder(true)}>Quiero</button>
+              <button className="btn btn-secundario" onClick={() => responder(false)}>No quiero</button>
+              {estado.estadoCanto.tipo === "truco" && estado.trucoNivel < 3 && (
+                <button className="btn" onClick={escalarTruco}>{NIVEL_TEXTO[SIGUIENTE_NIVEL[estado.trucoNivel]]}</button>
+              )}
+              {estado.estadoCanto.tipo === "envido" && (estado.estadoCanto.siguientes || []).map((t) => (
+                <button key={t} className="btn" onClick={() => cantarEnvido(t)}>{ETIQUETA_ENVIDO[t]}</button>
+              ))}
+            </>
+          )}
+          {/* Botones generales: siempre presentes; apagados cuando no se pueden usar. */}
+          {!esEspectador && (
+            <>
+              <button className="btn btn-general" disabled={!puedoCantarTruco} onClick={cantarTruco}>
+                {NIVEL_TEXTO[SIGUIENTE_NIVEL[estado.trucoNivel]] || "Truco"}
+              </button>
+              <button className="btn btn-general" disabled={!estado.envidoDisponible} onClick={() => cantarEnvido("envido")}>Envido</button>
+              <button className="btn btn-general" disabled={!estado.envidoDisponible} onClick={() => cantarEnvido("falta-envido")}>Falta Envido</button>
               {(estado.florInicial || estado.florDeclarar) && <button className="btn" onClick={() => cantarFlor("flor")}>🌸 Flor</button>}
               {estado.florOpcion && <button className="btn" onClick={() => cantarFlor("contraflor-al-resto")}>Contra flor al resto</button>}
               {estado.florOpcion && <button className="btn btn-secundario" onClick={() => cantarFlor("con-flor-quiero")}>Con flor, quiero</button>}
-              {puedoIrseAlMazo && <button className="btn btn-secundario" onClick={irseAlMazo}>Irse al mazo</button>}
+              <button className="btn btn-general" disabled={!puedoIrseAlMazo} onClick={irseAlMazo}>Irse al mazo</button>
             </>
-          ))}
+          )}
         </div>
         <div className="mesa-wrap">
           <div className="mesa">

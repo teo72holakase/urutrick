@@ -203,18 +203,20 @@ export class GameEngine {
   responderTruco(jugadorId, quiero) {
     if (!this.estadoCanto || this.estadoCanto.tipo !== "truco") throw new Error("No hay truco pendiente");
     if (this.equipoDe(jugadorId) === this.estadoCanto.equipoQueCanto) throw new Error("No podés responder tu propio canto");
-    const equipoRival = this.rivalDe(this.estadoCanto.equipoQueCanto);
+    const equipoQueCanto = this.estadoCanto.equipoQueCanto;
+    const equipoQueResponde = this.rivalDe(equipoQueCanto);
     this.estadoCanto.respondido = true;
     this.registrarAccion(jugadorId, quiero ? "Quiero" : "No quiero");
     if (!quiero) {
+      // Al no querer, los puntos en juego (los del nivel anterior) van a quien CANTÓ.
       const nivel = NIVELES_TRUCO[this.trucoNivel - 1];
       const puntosPrevios = this.trucoNivel <= 1 ? 1 : PUNTOS_TRUCO[NIVELES_TRUCO[this.trucoNivel - 2]];
-      this.registrarPuntos(equipoRival, puntosPrevios, `${nivel} no querido`);
+      this.registrarPuntos(equipoQueCanto, puntosPrevios, `${nivel} no querido`);
       this.estadoCanto = null;
-      this.cerrarMano(equipoRival);
+      this.cerrarMano(equipoQueCanto);
       return { quiero };
     }
-    this.trucoPalabra = equipoRival; // ahora puede subir el equipo que acaba de decir "quiero"
+    this.trucoPalabra = equipoQueResponde; // ahora puede subir el equipo que acaba de decir "quiero"
     this.estadoCanto = null;
     return { quiero };
   }

@@ -2,11 +2,41 @@ import { useEffect, useState } from "react";
 import { socket } from "../../lib/socket";
 import CreateLobbyModal from "./CreateLobbyModal";
 
+function ColumnaRanking({ titulo, filas }) {
+  return (
+    <div className="ranking-col">
+      <div className="ranking-col-titulo">{titulo}</div>
+      {(!filas || filas.length === 0) && <div className="ranking-vacio">—</div>}
+      {(filas || []).map((f, i) => (
+        <div key={i} className="ranking-fila">
+          <span className="ranking-pos">{i + 1}.</span>
+          <span className="ranking-nombre">{f.nombre}</span>
+          <span className="ranking-valor">{f.valor}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Leaderboard({ ranking }) {
+  return (
+    <div className="leaderboard">
+      <h3 className="titulo leaderboard-titulo">🏆 Leaderboard</h3>
+      <div className="ranking-cols">
+        <ColumnaRanking titulo="Manos ganadas" filas={ranking.manos} />
+        <ColumnaRanking titulo="Mesas ganadas" filas={ranking.mesas} />
+        <ColumnaRanking titulo="Puntos hechos" filas={ranking.puntos} />
+      </div>
+    </div>
+  );
+}
+
 export default function LobbyBrowser({ nombreJugador, onEntrarLobby, onEspectar }) {
   const [lobbies, setLobbies] = useState([]);
   const [mostrarCrear, setMostrarCrear] = useState(false);
   const [error, setError] = useState("");
   const [refrescando, setRefrescando] = useState(false);
+  const [ranking, setRanking] = useState({ manos: [], mesas: [], puntos: [] });
 
   function refrescar() {
     setRefrescando(true);
@@ -14,12 +44,18 @@ export default function LobbyBrowser({ nombreJugador, onEntrarLobby, onEspectar 
       setLobbies(lista);
       setRefrescando(false);
     });
+    socket.emit("stats:leaderboard", (r) => r && setRanking(r));
   }
 
   useEffect(() => {
     socket.emit("lobby:listar", setLobbies);
+    socket.emit("stats:leaderboard", (r) => r && setRanking(r));
     socket.on("lobby:actualizado", setLobbies);
-    return () => socket.off("lobby:actualizado", setLobbies);
+    socket.on("stats:actualizado", setRanking);
+    return () => {
+      socket.off("lobby:actualizado", setLobbies);
+      socket.off("stats:actualizado", setRanking);
+    };
   }, []);
 
   function crear(data) {
@@ -59,6 +95,8 @@ export default function LobbyBrowser({ nombreJugador, onEntrarLobby, onEspectar 
         </div>
       ))}
       {mostrarCrear && <CreateLobbyModal onCrear={crear} onClose={() => setMostrarCrear(false)} />}
+
+      <Leaderboard ranking={ranking} />
     </div>
   );
 }
