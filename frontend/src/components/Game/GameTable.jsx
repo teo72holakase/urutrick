@@ -205,8 +205,10 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
   const puedoResponderCanto = !esEspectador && cantoPendiente && estado.estadoCanto.equipoQueResponde === miEquipo;
   const nombreEquipoA = esUno ? (jugadores.find((j) => j.equipo === "A")?.nombre || "Equipo A") : "Equipo A";
   const nombreEquipoB = esUno ? (jugadores.find((j) => j.equipo === "B")?.nombre || "Equipo B") : "Equipo B";
-  const puedoCantarTruco = !esEspectador && !cantoPendiente && !estado.bazaPendiente && estado.trucoNivel < 3 && estado.trucoPalabra === miEquipo;
+  const nombreEquipo = (eq) => (eq === "A" ? nombreEquipoA : eq === "B" ? nombreEquipoB : eq);
+  const puedoCantarTruco = !esEspectador && !cantoPendiente && !estado.bazaPendiente && !estado.manoTerminada && estado.trucoNivel < 3 && estado.trucoPalabra === miEquipo;
   const puedoIrseAlMazo = !esEspectador && !cantoPendiente && !estado.bazaPendiente && !estado.manoTerminada;
+  const revelDone = enRevelacion && revelCount >= ((estado.revelacionEnvido.orden || []).length);
 
   function jugarCarta(cartaId) { if (!esEspectador) socket.emit("juego:jugar-carta", { lobbyId: lobby.id, cartaId }); }
   function cantarTruco() { socket.emit("juego:cantar-truco", { lobbyId: lobby.id }); }
@@ -318,14 +320,24 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
         <div className="panel historial-manos">
           {(estado.historialManos || []).slice().reverse().map((h) => (
             <div key={h.numero} className="fila-historial">
-              {esUno ? (h.ganador === "A" ? nombreEquipoA : nombreEquipoB) : `Equipo ${h.ganador}`} ganó la mano +{h.puntos} puntos
-              {h.detalle?.length > 0 && ` (${h.detalle.map((d) => `+${d.puntos} de ${d.motivo}`).join(" y ")})`}
+              <b>{esUno ? (h.ganador === "A" ? nombreEquipoA : nombreEquipoB) : `Equipo ${h.ganador}`} ganó la mano</b>
+              {h.detalle?.length > 0 && (
+                <span> — {h.detalle.map((d) => `+${d.puntos} ${nombreEquipo(d.equipo)} (${d.motivo})`).join(" · ")}</span>
+              )}
             </div>
           ))}
         </div>
       )}
 
       {!esEspectador && estado.tengoFlor && <div className="banner-flor">🌸 ¡Tenés Flor! Podés cantarla antes de la primera baza.</div>}
+
+      {enRevelacion && (
+        <div className="banner-envido">
+          {revelDone
+            ? `${nombreEquipo(estado.revelacionEnvido.ganador)} ganó el envido (+${estado.revelacionEnvido.puntos})`
+            : "🗣️ Cantando los tantos…"}
+        </div>
+      )}
 
       <div className="mesa-wrap">
         <div className="mesa">
@@ -334,13 +346,7 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
         <HistorialBazas estado={estado} jugadores={jugadores} esUno={esUno} />
       </div>
 
-      {enRevelacion && (
-        <div className="panel panel-canto-tantos" style={{ marginTop: "1rem", textAlign: "center" }}>
-          <p>🗣️ Cantando los tantos…</p>
-        </div>
-      )}
-
-      {!esEspectador && !enRevelacion && (cantoPendiente ? (
+      {!esEspectador && !enRevelacion && !estado.manoTerminada && (cantoPendiente ? (
         <div className="panel" style={{ marginTop: "1rem", textAlign: "center" }}>
           <p>Canto: <b>{nombreCanto(estado.estadoCanto.nivel)}</b> ({estado.estadoCanto.tipo})</p>
           {puedoResponderCanto ? (

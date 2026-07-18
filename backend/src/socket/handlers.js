@@ -9,7 +9,7 @@ const bazaTimers = new Map(); // lobbyId -> setTimeout handle (delay antes de re
 const revelTimers = new Map(); // lobbyId -> setTimeout handle (fin de la revelación de envido)
 const conexiones = new Map(); // userId -> socket.id actual
 
-const DELAY_RESOLVER_BAZA = 1100; // ms que quedan las cartas jugadas visibles en el centro de la mesa
+const DELAY_RESOLVER_BAZA = 2000; // ms que quedan las cartas jugadas visibles en el centro de la mesa antes de recoger la baza
 const DELAY_CANTO_ENVIDO = 2000; // ms entre cada "canto de tantos" sobre la cabeza de cada jugador
 
 function emitirA(io, userId, evento, payload) {

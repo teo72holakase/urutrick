@@ -58,9 +58,12 @@ export class GameEngine {
   cerrarMano(ganador) {
     this.manoTerminada = true;
     this.ganadorMano = ganador;
-    const detalleGanador = this.detalleManoActual.filter((d) => d.equipo === ganador);
-    const puntos = detalleGanador.reduce((s, d) => s + d.puntos, 0);
-    this.historialManos.push({ numero: this.historialManos.length + 1, ganador, puntos, detalle: detalleGanador });
+    // Guardamos el detalle de AMBOS equipos (mano, truco, envido, flor...) para
+    // que en el historial se vean, por ejemplo, los puntos de envido aunque los
+    // haya ganado el equipo que perdió la mano.
+    const detalle = this.detalleManoActual.slice();
+    const puntos = detalle.filter((d) => d.equipo === ganador).reduce((s, d) => s + d.puntos, 0);
+    this.historialManos.push({ numero: this.historialManos.length + 1, ganador, puntos, detalle });
   }
 
   // --- Jugar carta ---
@@ -193,6 +196,8 @@ export class GameEngine {
     if (this.envidoResuelto || this.bazas.length !== 0 || this.bazaPendiente || this.revelacionEnvido) return false;
     if (this.algunTieneFlorSinResolver()) return false;
     if (jugadorId && this.haJugadoCarta(jugadorId)) return false;
+    // Solo el jugador que tiene el turno puede iniciar el canto de envido.
+    if (jugadorId && this.jugadorActual()?.id !== jugadorId) return false;
     return true;
   }
 

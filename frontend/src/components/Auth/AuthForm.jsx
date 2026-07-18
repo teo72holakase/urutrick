@@ -25,7 +25,9 @@ export default function AuthForm() {
 
   return (
     <div className="panel" style={{ maxWidth: 380, margin: "4rem auto" }}>
-      <h1 className="titulo" style={{ textAlign: "center" }}>🃏 Truco Uruguayo</h1>
+      <h1 className="titulo" style={{ textAlign: "center" }}>
+        <img src="/urutrick.png" alt="" className="titulo-icono" /> Truco Uruguayo
+      </h1>
       <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
         <input placeholder="Usuario" value={usuario} onChange={(e) => setUsuario(e.target.value)} required minLength={3} />
         <input type="password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />

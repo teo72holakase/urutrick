@@ -132,7 +132,9 @@ export default function App() {
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "1rem" }}>
       <header className="header-app">
-        <h1 className="titulo">🃏 UruTrick</h1>
+        <h1 className="titulo">
+          <img src="/urutrick.png" alt="" className="titulo-icono" /> UruTrick
+        </h1>
         <div className="header-acciones">
           <ThemeToggle />
           <button className="btn btn-secundario" onClick={() => setMostrarReglas(true)}>📖 Reglas</button>
