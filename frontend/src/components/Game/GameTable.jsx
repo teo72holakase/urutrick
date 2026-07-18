@@ -5,6 +5,8 @@ import TurnTimer from "./TurnTimer";
 
 const NIVEL_TEXTO = { truco: "Truco", retruco: "Retruco", vale4: "Vale 4" };
 const SIGUIENTE_NIVEL = { 0: "truco", 1: "retruco", 2: "vale4" };
+const ETIQUETA_ENVIDO = { envido: "Envido", "real-envido": "Real Envido", "falta-envido": "Falta Envido" };
+const nombreCanto = (nivel) => ETIQUETA_ENVIDO[nivel] || NIVEL_TEXTO[nivel] || (nivel || "").replace(/-/g, " ");
 
 function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, jugarCarta, lobby, recogiendo, esModoEquipos }) {
   const esYo = !esEspectador && j.id === userId;
@@ -117,7 +119,6 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
   function responderFlor(q) { socket.emit("juego:responder-flor", { lobbyId: lobby.id, quiero: q }); }
   function irseAlMazo() { socket.emit("juego:irse-al-mazo", { lobbyId: lobby.id }); }
   function escalarTruco() { responderTruco(true); cantarTruco(); }
-  function escalarEnvido(tipo) { responderEnvido(true); cantarEnvido(tipo); }
 
   function responder(q) {
     const t = estado.estadoCanto.tipo;
@@ -226,7 +227,7 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
 
       {!esEspectador && (cantoPendiente ? (
         <div className="panel" style={{ marginTop: "1rem", textAlign: "center" }}>
-          <p>Canto: <b>{estado.estadoCanto.nivel}</b> ({estado.estadoCanto.tipo})</p>
+          <p>Canto: <b>{nombreCanto(estado.estadoCanto.nivel)}</b> ({estado.estadoCanto.tipo})</p>
           {puedoResponderCanto ? (
             <div className="acciones-canto">
               <button className="btn" onClick={() => responder(true)}>Quiero</button>
@@ -234,11 +235,9 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
               {estado.estadoCanto.tipo === "truco" && estado.trucoNivel < 3 && (
                 <button className="btn" onClick={escalarTruco}>{NIVEL_TEXTO[SIGUIENTE_NIVEL[estado.trucoNivel]]}</button>
               )}
-              {estado.estadoCanto.tipo === "envido" && estado.estadoCanto.nivel !== "falta-envido" && (
-                <button className="btn" onClick={() => escalarEnvido(estado.estadoCanto.nivel === "envido" ? "real-envido" : "falta-envido")}>
-                  {estado.estadoCanto.nivel === "envido" ? "Real Envido" : "Falta Envido"}
-                </button>
-              )}
+              {estado.estadoCanto.tipo === "envido" && (estado.estadoCanto.siguientes || []).map((t) => (
+                <button key={t} className="btn" onClick={() => cantarEnvido(t)}>{ETIQUETA_ENVIDO[t]}</button>
+              ))}
             </div>
           ) : (
             <p className="texto-suave">Esperando respuesta del rival...</p>
@@ -248,6 +247,7 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
         <div className="acciones-canto">
           {puedoCantarTruco && <button className="btn" onClick={cantarTruco}>{NIVEL_TEXTO[SIGUIENTE_NIVEL[estado.trucoNivel]]}</button>}
           {estado.envidoDisponible && <button className="btn" onClick={() => cantarEnvido("envido")}>Envido</button>}
+          {estado.envidoDisponible && <button className="btn" onClick={() => cantarEnvido("falta-envido")}>Falta Envido</button>}
           {estado.tengoFlor && <button className="btn" onClick={() => cantarFlor("flor")}>🌸 Flor</button>}
           {estado.tengoFlor && <button className="btn" onClick={() => cantarFlor("contraflor")}>Contraflor</button>}
           {puedoIrseAlMazo && <button className="btn btn-secundario" onClick={irseAlMazo}>Irse al mazo</button>}

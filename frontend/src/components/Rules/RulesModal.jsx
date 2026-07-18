@@ -4,6 +4,7 @@ const CONTENIDO = {
   general: {
     titulo: "Valores de las cartas (de mayor a menor)",
     texto: [
+      "PIEZAS (palo de la muestra): son las más fuertes de todas, por encima del ancho de espada. Orden: 2 > 4 > 5 > 11 > 10 de la muestra. Si la muestra es una pieza, el 12 de ese palo la reemplaza.",
       "1° Ancho de espada (matacas)",
       "2° Ancho de basto",
       "3° Siete de espada",
@@ -49,11 +50,12 @@ const CONTENIDO = {
     titulo: "Cómo y cuándo se canta",
     texto: [
       "ENVIDO: se canta antes de jugar la primera carta. Suma los puntos de dos cartas del mismo palo (+20) o el valor más alto de una sola carta. Las figuras (10,11,12) valen 0.",
-      "Escalada de envido: Envido → Envido (acumula) → Real Envido → Falta Envido.",
+      "Escalada de envido: Envido → Envido (acumula) → Real Envido → Falta Envido. La Falta Envido también puede cantarse de entrada.",
       "TRUCO: se puede cantar en cualquier momento del juego. Escala: Truco → Retruco → Vale Cuatro.",
       "Ante un canto, se responde: 'Quiero', 'No quiero', o se escala al siguiente nivel.",
       "Si no se responde a tiempo, el sistema juega 'No quiero' automáticamente.",
-      "FLOR (si está habilitada en la mesa): se canta cuando un jugador tiene 3 cartas del mismo palo.",
+      "FLOR (si está habilitada en la mesa): hay flor con 3 del mismo palo, o usando las piezas (cartas del palo de la muestra) como comodín: 1 pieza + 2 del mismo palo, o 2 piezas + 1 cualquiera.",
+      "Si tenés flor no podés cantar envido (la flor lo reemplaza). Un solo equipo con flor suma 3. Si ambos equipos tienen flor, se disputan los puntos.",
     ],
   },
 };

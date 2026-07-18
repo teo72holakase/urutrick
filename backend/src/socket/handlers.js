@@ -78,14 +78,17 @@ function armarTimerJugada(io, lobby) {
   const timer = new TurnTimer(TIEMPOS.jugarCarta, () => {
     try {
       if (!lobby.engine) return;
-      const jugadorId = lobby.engine.jugadorActual().id;
-      if (lobby.engine.estadoCanto && !lobby.engine.estadoCanto.respondido) {
-        const tipo = lobby.engine.estadoCanto.tipo;
-        if (tipo === "truco") lobby.engine.responderTruco(jugadorId, false);
-        else if (tipo === "flor") lobby.engine.responderFlor(jugadorId, false);
-        else lobby.engine.responderEnvido(jugadorId, false);
+      const ec = lobby.engine.estadoCanto;
+      if (ec && !ec.respondido) {
+        // Responde automáticamente "no quiero" en nombre del equipo que debe responder
+        // (no necesariamente el del turno de la carta).
+        const respondedor = lobby.jugadores.find((j) => lobby.engine.equipoDe(j.id) === ec.equipoQueResponde)?.id
+          || lobby.engine.jugadorActual().id;
+        if (ec.tipo === "truco") lobby.engine.responderTruco(respondedor, false);
+        else if (ec.tipo === "flor") lobby.engine.responderFlor(respondedor, false);
+        else lobby.engine.responderEnvido(respondedor, false);
       } else {
-        lobby.engine.jugarCartaAleatoria(jugadorId);
+        lobby.engine.jugarCartaAleatoria(lobby.engine.jugadorActual().id);
       }
       emitirEstado(io, lobby);
       if (lobby.engine.bazaPendiente) {

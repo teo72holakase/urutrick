@@ -26,6 +26,33 @@ function valorEnvido(numero) {
   return numero;
 }
 
+// --- Piezas (truco uruguayo con muestra) ---
+// Las "piezas" son cartas del palo de la muestra: 2, 4, 5, 11 y 10. Son las cartas
+// más fuertes del juego (por encima del ancho de espada) y valen fijo en los tantos.
+// Si la muestra ES una pieza, el 12 (rey) del palo la reemplaza y toma su valor y
+// jerarquía (regla de la sustitución / "el pelado").
+const NUM_PIEZAS = [2, 4, 5, 11, 10]; // de mayor a menor jerarquía
+const VALOR_PIEZA = { 2: 30, 4: 29, 5: 28, 11: 27, 10: 27 }; // valor en tantos
+
+export function esPieza(carta, muestra) {
+  return numeroPiezaEfectivo(carta, muestra) != null;
+}
+
+// Número de pieza "efectivo": para las piezas normales es su propio número; para el
+// 12 sustituto es el número de la pieza que salió como muestra. Null si no es pieza.
+export function numeroPiezaEfectivo(carta, muestra) {
+  if (!carta || !muestra || carta.palo !== muestra.palo) return null;
+  if (NUM_PIEZAS.includes(carta.numero) && carta.numero !== muestra.numero) return carta.numero;
+  if (carta.numero === 12 && NUM_PIEZAS.includes(muestra.numero)) return muestra.numero;
+  return null;
+}
+
+// Valor fijo de la pieza para el conteo de tantos (30/29/28/27/27), o null.
+export function valorPiezaTantos(carta, muestra) {
+  const n = numeroPiezaEfectivo(carta, muestra);
+  return n == null ? null : VALOR_PIEZA[n];
+}
+
 export function crearMazo() {
   const mazo = [];
   for (const palo of PALOS) {
@@ -49,11 +76,21 @@ export function jerarquiaIndex(cartaId) {
   return JERARQUIA.indexOf(cartaId); // menor index = carta más fuerte
 }
 
-export function compararCartas(cartaA, cartaB) {
-  const ia = jerarquiaIndex(cartaA.id);
-  const ib = jerarquiaIndex(cartaB.id);
-  if (ia < ib) return 1;  // A gana
-  if (ia > ib) return -1; // B gana
+// Fuerza de una carta para ganar la baza. Mayor = más fuerte. Las piezas del palo
+// de la muestra van por encima de toda la jerarquía tradicional (2 > 4 > 5 > 11 > 10).
+export function fuerzaCarta(carta, muestra) {
+  const nEf = numeroPiezaEfectivo(carta, muestra);
+  if (nEf != null) return 1000 - NUM_PIEZAS.indexOf(nEf); // 1000..996
+  const idx = jerarquiaIndex(carta.id);
+  if (idx === -1) return -1000;
+  return 100 - idx; // debajo de las piezas, pero respeta el orden tradicional
+}
+
+export function compararCartas(cartaA, cartaB, muestra) {
+  const fa = fuerzaCarta(cartaA, muestra);
+  const fb = fuerzaCarta(cartaB, muestra);
+  if (fa > fb) return 1;  // A gana
+  if (fa < fb) return -1; // B gana
   return 0; // empate (parda)
 }
 

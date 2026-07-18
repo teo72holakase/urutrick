@@ -1,8 +1,8 @@
-import { crearMazo, barajar, compararCartas } from "./Deck.js";
+import { crearMazo, barajar, compararCartas, esPieza, numeroPiezaEfectivo, valorPiezaTantos } from "./Deck.js";
 
 const PUNTOS_TRUCO = { truco: 2, retruco: 3, vale4: 4 };
 const NIVELES_TRUCO = ["truco", "retruco", "vale4"];
-const PUNTOS_ENVIDO = { envido: 2, "real-envido": 3, "falta-envido": null };
+const VALOR_ENVIDO_CANTO = { envido: 2, "real-envido": 3 };
 const PUNTOS_FLOR = { flor: 3, contraflor: 6, "contraflor-al-resto": null };
 
 export class GameEngine {
@@ -102,9 +102,9 @@ export class GameEngine {
   resolverBaza() {
     let mejor = this.cartasJugadas[0];
     for (const jugada of this.cartasJugadas.slice(1)) {
-      if (compararCartas(jugada.carta, mejor.carta) > 0) mejor = jugada;
+      if (compararCartas(jugada.carta, mejor.carta, this.muestra) > 0) mejor = jugada;
     }
-    const empatados = this.cartasJugadas.filter((j) => compararCartas(j.carta, mejor.carta) === 0);
+    const empatados = this.cartasJugadas.filter((j) => compararCartas(j.carta, mejor.carta, this.muestra) === 0);
     const equipoGanador = empatados.length > 1 ? "parda" : this.equipoDe(mejor.jugadorId);
     this.bazas.push({ equipoGanador });
     this.cartasJugadas = [];
@@ -175,62 +175,169 @@ export class GameEngine {
     return !this.envidoResuelto && this.bazas.length === 0 && !this.bazaPendiente && !this.algunTieneFlorSinResolver();
   }
 
+  // Qué cantos de envido se pueden encadenar a partir de la cadena actual.
+  // Escalada: Envido → Envido (una sola vez más) → Real Envido → Falta Envido.
+  siguientesEnvidoValidos(cadena) {
+    if (!cadena || cadena.length === 0) return ["envido", "real-envido", "falta-envido"];
+    const ultimo = cadena[cadena.length - 1];
+    if (ultimo === "falta-envido") return [];
+    const tieneReal = cadena.includes("real-envido");
+    const cantEnvidos = cadena.filter((c) => c === "envido").length;
+    const opciones = [];
+    if (ultimo === "envido" && cantEnvidos < 2) opciones.push("envido");
+    if (!tieneReal) opciones.push("real-envido");
+    opciones.push("falta-envido");
+    return opciones;
+  }
+
+  // Sirve tanto para el primer canto como para las subidas (revirar). Si ya hay un
+  // envido pendiente, este canto se trata como una escalada: NO se resuelve, queda
+  // pendiente para que responda el otro equipo (ahí aparece Quiero/No quiero/subir).
   cantarEnvido(jugadorId, tipo) {
-    if (!this.envidoDisponible()) throw new Error("Ya no se puede cantar envido en esta mano");
     const equipo = this.equipoDe(jugadorId);
-    const equipoRival = this.rivalDe(equipo);
-    this.estadoCanto = { tipo: "envido", nivel: tipo, equipoQueCanto: equipo, equipoQueResponde: equipoRival, respondido: false };
+    const ec = this.estadoCanto;
+    if (ec && ec.tipo === "envido" && !ec.respondido) {
+      if (equipo !== ec.equipoQueResponde) throw new Error("No es tu turno de responder el envido");
+      if (!this.siguientesEnvidoValidos(ec.cadena).includes(tipo)) throw new Error("No podés cantar ese envido ahora");
+      ec.acumuladoNoQuerido = ec.acumuladoQuerido || 1; // rechazar ahora paga lo ya acumulado
+      if (tipo === "falta-envido") ec.esFalta = true;
+      else ec.acumuladoQuerido += VALOR_ENVIDO_CANTO[tipo];
+      ec.cadena.push(tipo);
+      ec.nivel = tipo;
+      ec.equipoQueCanto = equipo;
+      ec.equipoQueResponde = this.rivalDe(equipo);
+      ec.siguientes = this.siguientesEnvidoValidos(ec.cadena);
+      return ec;
+    }
+    if (!this.envidoDisponible()) throw new Error("Ya no se puede cantar envido en esta mano");
+    const cadena = [tipo];
+    this.estadoCanto = {
+      tipo: "envido",
+      nivel: tipo,
+      cadena,
+      equipoQueCanto: equipo,
+      equipoQueResponde: this.rivalDe(equipo),
+      acumuladoQuerido: tipo === "falta-envido" ? 0 : VALOR_ENVIDO_CANTO[tipo],
+      acumuladoNoQuerido: 1,
+      esFalta: tipo === "falta-envido",
+      siguientes: this.siguientesEnvidoValidos(cadena),
+      respondido: false,
+    };
     return this.estadoCanto;
+  }
+
+  // Gana el envido el puntaje más alto; en caso de empate gana el equipo del
+  // jugador "mano" (o el más cercano a la mano). Se recorre en orden de mano.
+  resolverGanadorEnvido() {
+    const jugadores = this.jugadoresOrdenados();
+    const n = jugadores.length;
+    let mejorVal = -1, ganador = null, mejorA = -1, mejorB = -1;
+    for (let k = 0; k < n; k++) {
+      const j = jugadores[(this.manoIndex + k) % n];
+      const val = this.calcularEnvidoJugador(j.id);
+      if (j.equipo === "A") mejorA = Math.max(mejorA, val); else mejorB = Math.max(mejorB, val);
+      if (val > mejorVal) { mejorVal = val; ganador = j.equipo; }
+    }
+    return { ganador, mejorA, mejorB };
+  }
+
+  // Aporte de una carta como "acompañante" del conteo: si es pieza, su cartón
+  // (número efectivo); si es común, su valor de envido (10,11,12 = 0).
+  aporteCarta(carta) {
+    const nEf = numeroPiezaEfectivo(carta, this.muestra);
+    return nEf != null ? nEf : carta.valorEnvido;
+  }
+
+  // Conteo de tantos. Con piezas se rompe el +20: se toma el valor fijo de la pieza
+  // mayor y se le suman los aportes de las otras cartas (una para el envido, las dos
+  // restantes para la flor). Sin piezas, envido tradicional / flor = 20 + suma.
+  calcularTantos(cartas, usarTodas) {
+    const piezas = cartas.filter((c) => esPieza(c, this.muestra));
+    if (piezas.length === 0) {
+      if (usarTodas) return 20 + cartas.reduce((s, c) => s + c.valorEnvido, 0);
+      const porPalo = {};
+      cartas.forEach((c) => { (porPalo[c.palo] = porPalo[c.palo] || []).push(c.valorEnvido); });
+      let mejor = Math.max(...cartas.map((c) => c.valorEnvido));
+      for (const palo in porPalo) {
+        if (porPalo[palo].length >= 2) {
+          const [x, y] = porPalo[palo].sort((a, b) => b - a);
+          mejor = Math.max(mejor, x + y + 20);
+        }
+      }
+      return mejor;
+    }
+    const mejorPieza = piezas.reduce((a, b) => (valorPiezaTantos(a, this.muestra) >= valorPiezaTantos(b, this.muestra) ? a : b));
+    const resto = cartas.filter((c) => c !== mejorPieza);
+    const base = valorPiezaTantos(mejorPieza, this.muestra);
+    if (usarTodas) return base + resto.reduce((s, c) => s + this.aporteCarta(c), 0);
+    return base + (resto.length ? Math.max(...resto.map((c) => this.aporteCarta(c))) : 0);
   }
 
   calcularEnvidoJugador(jugadorId) {
     const cartas = [...this.manos[jugadorId], ...this.cartasJugadas.filter((c) => c.jugadorId === jugadorId).map((c) => c.carta)];
-    const porPalo = {};
-    cartas.forEach((c) => { porPalo[c.palo] = porPalo[c.palo] || []; porPalo[c.palo].push(c.valorEnvido); });
-    let mejor = Math.max(...cartas.map((c) => c.valorEnvido));
-    for (const palo in porPalo) {
-      if (porPalo[palo].length >= 2) {
-        const [x, y] = porPalo[palo].sort((a, b) => b - a);
-        mejor = Math.max(mejor, x + y + 20);
-      }
-    }
-    return mejor;
+    return this.calcularTantos(cartas, false);
   }
 
   responderEnvido(jugadorId, quiero) {
-    if (!this.estadoCanto || this.estadoCanto.tipo !== "envido") throw new Error("No hay envido pendiente");
-    if (this.equipoDe(jugadorId) === this.estadoCanto.equipoQueCanto) throw new Error("No podés responder tu propio canto");
-    const equipoCanto = this.estadoCanto.equipoQueCanto;
-    this.estadoCanto.respondido = true;
+    const ec = this.estadoCanto;
+    if (!ec || ec.tipo !== "envido") throw new Error("No hay envido pendiente");
+    if (this.equipoDe(jugadorId) === ec.equipoQueCanto) throw new Error("No podés responder tu propio canto");
+    ec.respondido = true;
     this.envidoResuelto = true;
     if (!quiero) {
-      this.registrarPuntos(equipoCanto, 1, `${this.estadoCanto.nivel} no querido`);
+      this.registrarPuntos(ec.equipoQueCanto, ec.acumuladoNoQuerido, `${ec.nivel.replace(/-/g, " ")} no querido`);
       this.estadoCanto = null;
       return { quiero, ganador: null };
     }
-    let mejorA = -1, mejorB = -1;
-    for (const j of this.jugadoresOrdenados()) {
-      const val = this.calcularEnvidoJugador(j.id);
-      if (j.equipo === "A") mejorA = Math.max(mejorA, val); else mejorB = Math.max(mejorB, val);
-    }
-    const ganador = mejorA >= mejorB ? "A" : "B";
+    const { ganador, mejorA, mejorB } = this.resolverGanadorEnvido();
     let puntos;
-    if (this.estadoCanto.nivel === "falta-envido") puntos = this.puntajeLimite - this.puntos[ganador];
-    else puntos = PUNTOS_ENVIDO[this.estadoCanto.nivel] ?? 2;
-    this.registrarPuntos(ganador, puntos, this.estadoCanto.nivel.replace("-", " "));
+    if (ec.esFalta) puntos = Math.max(1, this.puntajeLimite - this.puntos[ganador]);
+    else puntos = ec.acumuladoQuerido;
+    this.registrarPuntos(ganador, puntos, ec.nivel.replace(/-/g, " "));
     this.estadoCanto = null;
     return { quiero, ganador, mejorA, mejorB };
   }
 
   // --- Flor ---
+  // Hay flor si las 3 cartas forman "mismo palo" usando las piezas (palo de la
+  // muestra) como comodín. Cubre: 3 del mismo palo · 1 pieza + 2 del mismo palo ·
+  // 2 piezas + 1 cualquiera · 3 piezas.
   tieneFlor(jugadorId) {
     const cartas = this.manos[jugadorId];
-    if (cartas.length < 3) return false;
-    return cartas.every((c) => c.palo === cartas[0].palo);
+    if (!cartas || cartas.length < 3) return false;
+    const piezas = cartas.filter((c) => esPieza(c, this.muestra));
+    const resto = cartas.filter((c) => !esPieza(c, this.muestra));
+    if (piezas.length >= 2) return true;                 // 2 piezas + 1 cualquiera
+    if (piezas.length === 1) return resto[0].palo === resto[1].palo; // 1 pieza + 2 del mismo palo
+    return cartas.every((c) => c.palo === cartas[0].palo); // sin piezas: 3 del mismo palo
+  }
+
+  // Equipos (distintos) que tienen al menos un jugador con flor.
+  equiposConFlor() {
+    const equipos = new Set();
+    for (const j of this.jugadoresOrdenados()) {
+      if (this.tieneFlor(j.id)) equipos.add(this.equipoDe(j.id));
+    }
+    return [...equipos];
   }
 
   calcularFlorJugador(jugadorId) {
-    return 20 + this.manos[jugadorId].reduce((s, c) => s + c.valorEnvido, 0);
+    return this.calcularTantos(this.manos[jugadorId], true);
+  }
+
+  // Gana la flor la más alta; empate → equipo del jugador mano (orden de mano).
+  resolverGanadorFlor() {
+    const jugadores = this.jugadoresOrdenados();
+    const n = jugadores.length;
+    let mejorVal = -1, ganador = null, mejorA = -1, mejorB = -1;
+    for (let k = 0; k < n; k++) {
+      const j = jugadores[(this.manoIndex + k) % n];
+      if (!this.tieneFlor(j.id)) continue;
+      const val = this.calcularFlorJugador(j.id);
+      if (j.equipo === "A") mejorA = Math.max(mejorA, val); else mejorB = Math.max(mejorB, val);
+      if (val > mejorVal) { mejorVal = val; ganador = j.equipo; }
+    }
+    return { ganador, mejorA, mejorB };
   }
 
   cantarFlor(jugadorId, tipo = "flor") {
@@ -240,33 +347,41 @@ export class GameEngine {
     if (!this.tieneFlor(jugadorId)) throw new Error("No tenés flor");
     const equipo = this.equipoDe(jugadorId);
     const equipoRival = this.rivalDe(equipo);
+    this.envidoResuelto = true; // la flor "mata" al envido
+
+    // Si el otro equipo NO tiene flor: son 3 puntos automáticos para el equipo con
+    // flor (aunque tenga dos jugadores con flor, siguen siendo 3 en total).
+    const rivalTieneFlor = this.equiposConFlor().includes(equipoRival);
+    if (!rivalTieneFlor) {
+      this.registrarPuntos(equipo, PUNTOS_FLOR.flor, "flor");
+      this.florResuelta = true;
+      this.estadoCanto = null;
+      return { resuelto: true, ganador: equipo, puntos: PUNTOS_FLOR.flor };
+    }
+
+    // Ambos equipos tienen flor: se juega la contienda (envido de flor / contraflor)
+    // para definir quién se lleva los puntos.
     this.estadoCanto = { tipo: "flor", nivel: tipo, equipoQueCanto: equipo, equipoQueResponde: equipoRival, respondido: false };
-    this.envidoResuelto = true;
     return this.estadoCanto;
   }
 
   responderFlor(jugadorId, quiero) {
-    if (!this.estadoCanto || this.estadoCanto.tipo !== "flor") throw new Error("No hay flor pendiente");
-    if (this.equipoDe(jugadorId) === this.estadoCanto.equipoQueCanto) throw new Error("No podés responder tu propio canto");
-    const equipoCanto = this.estadoCanto.equipoQueCanto;
-    this.estadoCanto.respondido = true;
+    const ec = this.estadoCanto;
+    if (!ec || ec.tipo !== "flor") throw new Error("No hay flor pendiente");
+    if (this.equipoDe(jugadorId) === ec.equipoQueCanto) throw new Error("No podés responder tu propio canto");
+    ec.respondido = true;
     this.florResuelta = true;
     if (!quiero) {
-      this.registrarPuntos(equipoCanto, PUNTOS_FLOR.flor, "flor no querida");
+      // No se juega la contienda: el que cantó se lleva los 3 de su flor.
+      this.registrarPuntos(ec.equipoQueCanto, PUNTOS_FLOR.flor, `${ec.nivel.replace(/-/g, " ")} no querida`);
       this.estadoCanto = null;
       return { quiero, ganador: null };
     }
-    let mejorA = -1, mejorB = -1;
-    for (const j of this.jugadoresOrdenados()) {
-      if (!this.tieneFlor(j.id)) continue;
-      const val = this.calcularFlorJugador(j.id);
-      if (j.equipo === "A") mejorA = Math.max(mejorA, val); else mejorB = Math.max(mejorB, val);
-    }
-    const ganador = mejorA >= mejorB ? "A" : "B";
+    const { ganador, mejorA, mejorB } = this.resolverGanadorFlor();
     let puntos;
-    if (this.estadoCanto.nivel === "contraflor-al-resto") puntos = this.puntajeLimite - this.puntos[ganador];
-    else puntos = PUNTOS_FLOR[this.estadoCanto.nivel] ?? 3;
-    this.registrarPuntos(ganador, puntos, this.estadoCanto.nivel.replace(/-/g, " "));
+    if (ec.nivel === "contraflor-al-resto") puntos = Math.max(1, this.puntajeLimite - this.puntos[ganador]);
+    else puntos = PUNTOS_FLOR[ec.nivel] ?? PUNTOS_FLOR.flor;
+    this.registrarPuntos(ganador, puntos, ec.nivel.replace(/-/g, " "));
     this.estadoCanto = null;
     return { quiero, ganador, mejorA, mejorB };
   }
