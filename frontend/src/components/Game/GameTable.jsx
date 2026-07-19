@@ -5,7 +5,7 @@ import TurnTimer from "./TurnTimer";
 
 const NIVEL_TEXTO = { truco: "Truco", retruco: "Retruco", vale4: "Vale 4" };
 const SIGUIENTE_NIVEL = { 0: "truco", 1: "retruco", 2: "vale4" };
-const ETIQUETA_ENVIDO = { envido: "Envido", "real-envido": "Real Envido", "falta-envido": "Falta Envido" };
+const ETIQUETA_ENVIDO = { envido: "Envido", "envido-envido": "5 Envido", "real-envido": "Real Envido", "falta-envido": "Falta Envido" };
 
 // Reparte a los jugadores en un damero alrededor de la mesa: 2v2 [AB / BA],
 // 3v3 [ABA / BAB]. "Yo" quedo en la fila de abajo, mis compañeros en diagonal
@@ -141,6 +141,35 @@ function HistorialBazas({ estado, jugadores, esUno }) {
       {bazas.map((b, i) => (
         <PilaBaza key={i} baza={b} jugadores={jugadores} esUno={esUno} />
       ))}
+    </div>
+  );
+}
+
+// Botón "Envido" con flecha desplegable: Envido, 5 Envido, Real Envido, Falta Envido.
+function MenuEnvido({ disabled, onElegir }) {
+  const [abierto, setAbierto] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!abierto) return;
+    const cerrar = (e) => { if (ref.current && !ref.current.contains(e.target)) setAbierto(false); };
+    document.addEventListener("mousedown", cerrar);
+    return () => document.removeEventListener("mousedown", cerrar);
+  }, [abierto]);
+  const opciones = ["envido", "envido-envido", "real-envido", "falta-envido"];
+  return (
+    <div className="menu-envido" ref={ref}>
+      <button className="btn btn-general btn-envido-flecha" disabled={disabled} onClick={() => setAbierto((v) => !v)}>
+        Envido ▾
+      </button>
+      {abierto && !disabled && (
+        <div className="menu-envido-lista">
+          {opciones.map((t) => (
+            <button key={t} className="menu-envido-item" onClick={() => { onElegir(t); setAbierto(false); }}>
+              {ETIQUETA_ENVIDO[t]}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -426,14 +455,14 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
               ))}
             </>
           )}
-          {/* Botones generales: siempre presentes; apagados cuando no se pueden usar. */}
-          {!esEspectador && (
+          {/* Botones generales: sólo cuando no hay un canto esperando respuesta (si no, se
+              duplicaban con los botones de Quiero/No quiero/subir de arriba). */}
+          {!esEspectador && !cantoPendiente && (
             <>
               <button className="btn btn-general" disabled={!puedoCantarTruco} onClick={cantarTruco}>
                 {NIVEL_TEXTO[SIGUIENTE_NIVEL[estado.trucoNivel]] || "Truco"}
               </button>
-              <button className="btn btn-general" disabled={!estado.envidoDisponible} onClick={() => cantarEnvido("envido")}>Envido</button>
-              <button className="btn btn-general" disabled={!estado.envidoDisponible} onClick={() => cantarEnvido("falta-envido")}>Falta Envido</button>
+              <MenuEnvido disabled={!estado.envidoDisponible} onElegir={cantarEnvido} />
               {(estado.florInicial || estado.florDeclarar) && <button className="btn" onClick={() => cantarFlor("flor")}>🌸 Flor</button>}
               {estado.florOpcion && <button className="btn" onClick={() => cantarFlor("contraflor-al-resto")}>Contra flor al resto</button>}
               {estado.florOpcion && <button className="btn btn-secundario" onClick={() => cantarFlor("con-flor-quiero")}>Con flor, quiero</button>}

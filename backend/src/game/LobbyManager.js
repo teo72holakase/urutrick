@@ -10,6 +10,7 @@ export class LobbyManager {
 
   listarPublicos() {
     return [...this.lobbies.values()]
+      .filter((l) => !l.finalizada)
       .map((l) => ({
         id: l.id,
         nombre: l.nombre,

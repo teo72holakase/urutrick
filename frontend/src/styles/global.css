@@ -125,6 +125,21 @@ h1, h2, h3, .titulo {
 }
 .btn-general:disabled:hover { transform: none; }
 
+.menu-envido { position: relative; display: inline-block; }
+.btn-envido-flecha { width: 100%; }
+.menu-envido-lista {
+  position: absolute; top: 100%; left: 0; margin-top: 4px; z-index: 20;
+  background: var(--madera-2); border: 2px solid var(--madera-3); border-radius: 8px;
+  box-shadow: 3px 3px 10px var(--sombra); overflow: hidden; min-width: 140px;
+}
+.menu-envido-item {
+  display: block; width: 100%; text-align: left; padding: 0.5rem 0.8rem;
+  background: transparent; border: none; color: var(--texto); font-family: "Cabin", sans-serif;
+  font-size: 0.9rem; cursor: pointer;
+}
+.menu-envido-item:hover { background: rgba(212,169,78,0.25); }
+.menu-envido-item + .menu-envido-item { border-top: 1px solid var(--madera-3); }
+
 input, select {
   font-family: "Cabin", sans-serif;
   background: rgba(0,0,0,0.2);

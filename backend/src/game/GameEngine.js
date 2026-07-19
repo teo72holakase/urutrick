@@ -5,7 +5,7 @@ const NIVELES_TRUCO = ["truco", "retruco", "vale4"];
 const VALOR_ENVIDO_CANTO = { envido: 2, "real-envido": 3 };
 const PUNTOS_FLOR = { flor: 3, contraflor: 6, "contraflor-al-resto": null };
 const TEXTO_TRUCO = { truco: "Truco", retruco: "Retruco", vale4: "Vale 4" };
-const TEXTO_ENVIDO = { envido: "Envido", "real-envido": "Real Envido", "falta-envido": "Falta Envido" };
+const TEXTO_ENVIDO = { envido: "Envido", "envido-envido": "5 Envido", "real-envido": "Real Envido", "falta-envido": "Falta Envido" };
 const TEXTO_FLOR = { flor: "Flor", contraflor: "Contraflor", "contraflor-al-resto": "Contra flor al resto" };
 
 export class GameEngine {
@@ -281,14 +281,15 @@ export class GameEngine {
       this.trucoPendienteGuardado = ec;
       this.avisar("El envido va primero");
     }
-    const cadena = [tipo];
+    const cadena = tipo === "envido-envido" ? ["envido", "envido"] : [tipo];
+    const acumulado = tipo === "falta-envido" ? 0 : tipo === "envido-envido" ? VALOR_ENVIDO_CANTO.envido * 2 : VALOR_ENVIDO_CANTO[tipo];
     this.estadoCanto = {
       tipo: "envido",
       nivel: tipo,
       cadena,
       equipoQueCanto: equipo,
       equipoQueResponde: this.rivalDe(equipo),
-      acumuladoQuerido: tipo === "falta-envido" ? 0 : VALOR_ENVIDO_CANTO[tipo],
+      acumuladoQuerido: acumulado,
       acumuladoNoQuerido: 1,
       esFalta: tipo === "falta-envido",
       siguientes: this.siguientesEnvidoValidos(cadena),
@@ -579,9 +580,10 @@ export class GameEngine {
       historialManos: this.historialManos,
       envidoDisponible: !esEspectador && this.envidoDisponible(paraJugadorId),
       tengoFlor: !esEspectador && this.bazas.length === 0 && !this.bazaPendiente && !this.florResuelta && this.tieneFlor(paraJugadorId),
-      // Botón "Flor" inicial: sólo en el turno del jugador y antes de que arranque la contienda.
+      // Botón "Flor" inicial: en cualquier momento antes de la primera baza (no hace
+      // falta que sea tu turno de jugar carta para poder cantarla).
       florInicial: !esEspectador && !this.florCanto && !this.florResuelta && this.bazas.length === 0 && !this.bazaPendiente
-        && this.jugadorActual().id === paraJugadorId && this.tieneFlor(paraJugadorId),
+        && this.tieneFlor(paraJugadorId),
       // Botón "Flor" del rival (contra-declaración) cuando el primer equipo ya cantó.
       florDeclarar: !esEspectador && !!this.florCanto && this.florCanto.fase === "esperando-rival"
         && this.equipoDe(paraJugadorId) === this.rivalDe(this.florCanto.primerEquipo) && this.tieneFlor(paraJugadorId),

@@ -163,12 +163,6 @@ function programarFinRevelacionEnvido(io, lobby) {
     try {
       if (!lobby.engine) return;
       lobby.engine.finalizarRevelacionEnvido();
-      // Si el envido cierra la partida, se deja ver toda la animación y recién a
-      // los 2s se anuncia el ganador de la partida.
-      if (lobby.engine.finDePartida()) {
-        setTimeout(() => { if (lobby.engine) emitirEstado(io, lobby); }, 2000);
-        return;
-      }
       emitirEstado(io, lobby);
       if (!lobby.engine.manoTerminada) armarTimerJugada(io, lobby);
     } catch (e) {
@@ -195,7 +189,10 @@ function emitirEstado(io, lobby) {
   }
   const ganador = lobby.engine.finDePartida();
   if (ganador) {
-    finalizarPartida(io, lobby, ganador);
+    if (!lobby._finPendiente) {
+      lobby._finPendiente = true;
+      setTimeout(() => finalizarPartida(io, lobby, ganador), 2200);
+    }
   } else if (lobby.engine.manoTerminada) {
     programarSiguienteMano(io, lobby);
   }
