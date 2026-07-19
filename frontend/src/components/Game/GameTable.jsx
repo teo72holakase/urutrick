@@ -53,7 +53,7 @@ function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, j
       )}
       <div className={`fila-cartas ${recogiendo ? "recogiendo" : ""} ${alMazo ? "al-mazo" : ""}`}>
         {slots.map((slot, i) => {
-          if (slot && slot.jugada) return <div key={`hueco-${j.id}-${i}`} className="carta-hueco" />;
+          if (slot && slot.jugada) return null; // ya jugada: no reserva espacio, así lo que queda se recentra
           const carta = slot;
           return (
             <div key={carta?.id || `${j.id}-${i}`} className="carta-repartida" style={{ animationDelay: `${i * 0.13}s` }}>
@@ -145,7 +145,7 @@ function HistorialBazas({ estado, jugadores, esUno }) {
   );
 }
 
-export default function GameTable({ lobby, userId, esEspectador = false, estado, finPartida, onVolverMenu }) {
+export default function GameTable({ lobby, userId, esEspectador = false, espectadoresCount = 0, estado, finPartida, onVolverMenu }) {
   const [recogiendo, setRecogiendo] = useState(false);
   const [cuentaMano, setCuentaMano] = useState(6);
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
@@ -363,6 +363,7 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
       </div>
       <p className="texto-suave" style={{ textAlign: "center", margin: "0 0 0.5rem" }}>
         Partida a {lobby.puntajeLimite || 30} tantos
+        {espectadoresCount > 0 && <> · 👀 {espectadoresCount}</>}
         {(estado.historialManos || []).length > 0 && (
           <> · <button className="link-historial" onClick={() => setMostrarHistorial((v) => !v)}>
             {mostrarHistorial ? "ocultar" : "ver"} historial de manos
@@ -393,6 +394,11 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
             {revelDone
               ? `${nombreEquipo(estado.revelacionEnvido.ganador)} ganó el envido (+${estado.revelacionEnvido.puntos})`
               : "🗣️ Cantando los tantos…"}
+          </div>
+        )}
+        {!enRevelacion && estado.manoTerminada && (
+          <div className="banner-envido">
+            Ganó la mano {esUno ? (estado.ganadorMano === "A" ? nombreEquipoA : nombreEquipoB) : `el equipo ${estado.ganadorMano}`} — siguiente mano en {cuentaMano}s
           </div>
         )}
       </div>
@@ -435,12 +441,6 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
           <HistorialBazas estado={estado} jugadores={jugadores} esUno={esUno} />
         </div>
       </div>
-
-      {estado.manoTerminada && (
-        <div className="panel" style={{ marginTop: "1rem", textAlign: "center" }}>
-          <p>Ganó la mano {esUno ? (estado.ganadorMano === "A" ? nombreEquipoA : nombreEquipoB) : `el equipo ${estado.ganadorMano}`} — siguiente mano en {cuentaMano}s</p>
-        </div>
-      )}
     </div>
   );
 }

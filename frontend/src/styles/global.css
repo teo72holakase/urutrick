@@ -319,7 +319,7 @@ input, select {
 .carta-frente { display: flex; flex-direction: column; align-items: center; }
 .franja-muestra { display: flex; justify-content: center; width: 100%; }
 .franja-muestra .muestra-central { justify-content: center; padding-left: 0; margin: 0; width: auto; }
-.centro-mesa-vertical .muestra-central { justify-content: center; padding-left: 0; position: relative; left: -25%; }
+.centro-mesa-vertical .muestra-central { justify-content: center; padding-left: 0; position: relative; left: -36%; }
 .matriz-2v2 .fila-jugadores, .matriz-2v2 .fila-frente { justify-content: space-between; padding: 0 6%; }
 
 .asiento { text-align: center; position: relative; }
@@ -377,7 +377,7 @@ input, select {
 .historial-manos { padding: 0.75rem 1rem; margin-bottom: 0.5rem; max-height: 160px; overflow-y: auto; }
 .fila-historial { padding: 0.2rem 0; border-bottom: 1px solid var(--madera-3); font-size: 0.85rem; }
 .fila-historial:last-child { border-bottom: none; }
-.fila-cartas { display: flex; gap: 0.3rem; justify-content: center; }
+.fila-cartas { display: flex; gap: 0.3rem; justify-content: center; min-height: var(--carta-h); }
 .icono-turno { font-size: 0.9rem; }
 
 .centro-mesa {

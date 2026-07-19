@@ -88,7 +88,7 @@ export default function LobbyBrowser({ nombreJugador, onEntrarLobby, onEspectar 
       {lobbies.length === 0 && <p>No hay mesas abiertas. ¡Creá una!</p>}
       {lobbies.map((l) => (
         <div key={l.id} style={{ display: "flex", justifyContent: "space-between", padding: "0.5rem 0", borderBottom: "1px solid var(--madera-3)" }}>
-          <span>{l.nombre} — {l.modo} — a {l.puntajeLimite} tantos — {l.jugadores}/{l.capacidad} {l.tienePassword ? "🔒" : ""} {l.iniciado ? "🎮 en curso" : ""}</span>
+          <span>{l.nombre} — {l.modo} — a {l.puntajeLimite} tantos — {l.jugadores}/{l.capacidad}{l.espectadores > 0 ? ` 👀${l.espectadores}` : ""} {l.tienePassword ? "🔒" : ""} {l.iniciado ? "🎮 en curso" : ""}</span>
           {!l.iniciado && l.jugadores < l.capacidad
             ? <button className="btn btn-secundario" onClick={() => unirse(l)}>Unirse</button>
             : <button className="btn btn-secundario" onClick={() => onEspectar(l.id)}>👁 Espectar</button>}

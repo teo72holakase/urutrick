@@ -17,6 +17,7 @@ export class LobbyManager {
         puntajeLimite: l.puntajeLimite,
         jugadores: l.jugadores.length,
         capacidad: CAPACIDAD[l.modo],
+        espectadores: (l.espectadores || []).length,
         tienePassword: !!l.password,
         iniciado: l.iniciado,
       }));

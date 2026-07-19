@@ -21,6 +21,18 @@ function emitirA(io, userId, evento, payload) {
   if (sid) io.to(sid).emit(evento, payload);
 }
 
+// El lobby interno tiene lobby.engine, que a su vez tiene engine.lobby (referencia
+// circular). Mandarlo tal cual en un ack de socket.io revienta la serialización
+// JSON silenciosamente: el uncaughtException global de server.js la atrapa y el
+// callback del cliente NUNCA llega a dispararse. Esto es lo que rompía "Espectar"
+// en mesas ya iniciadas (y, en teoría, cualquier reconexión post-inicio): el
+// servidor sí lo daba de alta, pero el cliente se quedaba esperando para siempre
+// una respuesta que nunca salía del server.
+function lobbyPublico(lobby) {
+  const { engine, ...resto } = lobby;
+  return resto;
+}
+
 function programarSiguienteMano(io, lobby) {
   if (sigManoTimers.has(lobby.id)) return;
   const handle = setTimeout(() => {
@@ -53,6 +65,7 @@ function finalizarPartida(io, lobby, ganador) {
   io.emit("stats:actualizado", leaderboard());
   // Si nadie sale explícitamente (cierran la pestaña), igual liberamos la mesa a los 5 min.
   setTimeout(() => {
+    io.to(lobby.id).emit("lobby:cerrada");
     lobbyManager.eliminar(lobby.id);
     io.emit("lobby:actualizado", lobbyManager.listarPublicos());
   }, 5 * 60 * 1000);
@@ -101,6 +114,7 @@ function verificarAbandono(io, lobby) {
       const hayAlguien = l.jugadores.some((j) => conexiones.has(j.id))
         || (l.espectadores || []).some((e) => conexiones.has(e.id));
       if (hayAlguien) return;
+      io.to(l.id).emit("lobby:cerrada");
       lobbyManager.eliminar(l.id);
       io.emit("lobby:actualizado", lobbyManager.listarPublicos());
     }, DELAY_ABANDONO);
@@ -266,7 +280,7 @@ export function registrarHandlers(io, socket) {
     try {
       const lobby = lobbyManager.crear({ ...data, creador: { id: userId, nombre: data.nombre_jugador } });
       socket.join(lobby.id);
-      cb({ ok: true, lobby });
+      cb({ ok: true, lobby: lobbyPublico(lobby) });
       io.emit("lobby:actualizado", lobbyManager.listarPublicos());
     } catch (e) { cb({ ok: false, error: e.message }); }
   });
@@ -276,7 +290,7 @@ export function registrarHandlers(io, socket) {
       const lobby = lobbyManager.unirse(lobbyId, { id: userId, nombre }, password);
       socket.join(lobbyId);
       io.to(lobbyId).emit("lobby:jugadores", lobby.jugadores);
-      cb({ ok: true, lobby });
+      cb({ ok: true, lobby: lobbyPublico(lobby) });
       io.emit("lobby:actualizado", lobbyManager.listarPublicos());
     } catch (e) { cb({ ok: false, error: e.message }); }
   });
@@ -286,7 +300,8 @@ export function registrarHandlers(io, socket) {
     try {
       const lobby = lobbyManager.espectar(lobbyId, { id: userId, nombre: nombre || "Espectador" });
       socket.join(lobbyId);
-      cb?.({ ok: true, lobby, iniciado: lobby.iniciado });
+      io.to(lobbyId).emit("lobby:espectadores", lobby.espectadores.length);
+      cb?.({ ok: true, lobby: lobbyPublico(lobby), iniciado: lobby.iniciado });
       if (lobby.iniciado) emitirA(io, userId, "estado", lobby.engine.estadoPublico(userId, true));
     } catch (e) { cb?.({ ok: false, error: e.message }); }
   });
@@ -300,7 +315,7 @@ export function registrarHandlers(io, socket) {
       const esEspectador = lobby.espectadores.some((e) => e.id === userId);
       if (!esJugador && !esEspectador) return cb?.({ ok: false });
       socket.join(lobbyId);
-      cb?.({ ok: true, lobby, iniciado: lobby.iniciado, esEspectador });
+      cb?.({ ok: true, lobby: lobbyPublico(lobby), iniciado: lobby.iniciado, esEspectador });
       if (lobby.iniciado) emitirA(io, userId, "estado", lobby.engine.estadoPublico(userId, esEspectador));
     } catch (e) { cb?.({ ok: false, error: e.message }); }
   });
@@ -434,6 +449,8 @@ export function registrarHandlers(io, socket) {
 
   socket.on("lobby:salir", ({ lobbyId }) => {
     lobbyManager.salir(lobbyId, userId);
+    const lobby = lobbyManager.get(lobbyId);
+    if (lobby) io.to(lobbyId).emit("lobby:espectadores", lobby.espectadores.length);
     io.emit("lobby:actualizado", lobbyManager.listarPublicos());
   });
 

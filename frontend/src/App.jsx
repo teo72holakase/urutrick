@@ -25,6 +25,7 @@ export default function App() {
   const [esEspectador, setEsEspectador] = useState(false);
   const [estadoJuego, setEstadoJuego] = useState(null);
   const [finPartida, setFinPartida] = useState(null);
+  const [espectadoresCount, setEspectadoresCount] = useState(0);
 
   // Escuchas globales de partida: registradas desde el primer render, así nunca se
   // pierde un "estado" que el server mande justo cuando recién arranca el juego o
@@ -48,15 +49,34 @@ export default function App() {
     // el espectador se quedaba clavado ahí para siempre (nunca nadie le
     // avisaba que ya había arrancado).
     function onIniciado() { setEnJuego(true); }
+    function onEspectadores(n) { setEspectadoresCount(n); }
+    // La mesa se cerró en el server (partida terminada y purgada tras 5 min, o
+    // sala de espera abandonada por todos): ya no existe del otro lado, así que
+    // no tiene sentido dejar a nadie mirando una mesa fantasma — se lo manda
+    // directo al menú principal.
+    function onCerrada() {
+      localStorage.removeItem("lobbyId");
+      setLobby(null);
+      setEnJuego(false);
+      setEsEspectador(false);
+      setEstadoJuego(null);
+      setFinPartida(null);
+      setEspectadoresCount(0);
+      irAUrl(null);
+    }
     socket.on("estado", onEstado);
     socket.on("fin-partida", onFin);
     socket.on("lobby:jugadores", onJugadores);
     socket.on("juego:iniciado", onIniciado);
+    socket.on("lobby:espectadores", onEspectadores);
+    socket.on("lobby:cerrada", onCerrada);
     return () => {
       socket.off("estado", onEstado);
       socket.off("fin-partida", onFin);
       socket.off("lobby:jugadores", onJugadores);
       socket.off("juego:iniciado", onIniciado);
+      socket.off("lobby:espectadores", onEspectadores);
+      socket.off("lobby:cerrada", onCerrada);
     };
   }, []);
 
@@ -77,6 +97,7 @@ export default function App() {
           setLobby(res.lobby);
           setEnJuego(!!res.iniciado);
           setEsEspectador(!!res.esEspectador);
+          setEspectadoresCount((res.lobby.espectadores || []).length);
           localStorage.setItem("lobbyId", objetivo);
           irAUrl(objetivo);
         } else if (idUrl) {
@@ -87,6 +108,7 @@ export default function App() {
                   setLobby(r.lobby);
                   setEnJuego(!!r.iniciado);
                   setEsEspectador(true);
+                  setEspectadoresCount((r.lobby.espectadores || []).length);
                   localStorage.setItem("lobbyId", idUrl);
                 }
               });
@@ -119,6 +141,7 @@ export default function App() {
   function entrarLobby(l) {
     setLobby(l);
     setEsEspectador(false);
+    setEspectadoresCount((l.espectadores || []).length);
     localStorage.setItem("lobbyId", l.id);
     irAUrl(l.id);
   }
@@ -129,6 +152,7 @@ export default function App() {
         setLobby(res.lobby);
         setEnJuego(!!res.iniciado);
         setEsEspectador(true);
+        setEspectadoresCount((res.lobby.espectadores || []).length);
         localStorage.setItem("lobbyId", lobbyId);
         irAUrl(lobbyId);
       }
@@ -143,6 +167,7 @@ export default function App() {
     setEsEspectador(false);
     setEstadoJuego(null);
     setFinPartida(null);
+    setEspectadoresCount(0);
     irAUrl(null);
   }
 
@@ -164,13 +189,14 @@ export default function App() {
       </header>
 
       {!lobby && <LobbyBrowser nombreJugador={user.name} onEntrarLobby={entrarLobby} onEspectar={espectarLobby} />}
-      {lobby && !enJuego && !esEspectador && <WaitingRoom lobby={lobby} />}
+      {lobby && !enJuego && !esEspectador && <WaitingRoom lobby={lobby} espectadoresCount={espectadoresCount} />}
       {lobby && !enJuego && esEspectador && <p className="panel" style={{ textAlign: "center" }}>Esperando a que la mesa <b>{lobby.nombre}</b> arranque...</p>}
       {lobby && enJuego && (
         <GameTable
           lobby={lobby}
           userId={user.$id}
           esEspectador={esEspectador}
+          espectadoresCount={espectadoresCount}
           estado={estadoJuego}
           finPartida={finPartida}
           onVolverMenu={salirLobby}
