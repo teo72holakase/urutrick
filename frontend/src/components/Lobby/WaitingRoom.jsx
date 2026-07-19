@@ -1,14 +1,8 @@
-import { useEffect } from "react";
 import { socket } from "../../lib/socket";
 
 const CAPACIDAD = { "1v1": 2, "2v2": 4, "3v3": 6 };
 
-export default function WaitingRoom({ lobby, onIniciar }) {
-  useEffect(() => {
-    socket.on("juego:iniciado", onIniciar);
-    return () => socket.off("juego:iniciado", onIniciar);
-  }, []);
-
+export default function WaitingRoom({ lobby }) {
   const jugadores = lobby.jugadores;
   const completo = jugadores.length === CAPACIDAD[lobby.modo];
 

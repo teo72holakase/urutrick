@@ -41,13 +41,22 @@ export default function App() {
     function onJugadores(jugadores) {
       setLobby((prev) => (prev ? { ...prev, jugadores } : prev));
     }
+    // Antes esto SOLO lo escuchaba WaitingRoom, que no se renderiza para
+    // espectadores (lobby && !enJuego && esEspectador cae en el mensaje de
+    // "esperando que arranque"). Por eso, si alguien empezaba a espectar una
+    // mesa que todavía estaba en sala de espera, cuando el dueño la iniciaba
+    // el espectador se quedaba clavado ahí para siempre (nunca nadie le
+    // avisaba que ya había arrancado).
+    function onIniciado() { setEnJuego(true); }
     socket.on("estado", onEstado);
     socket.on("fin-partida", onFin);
     socket.on("lobby:jugadores", onJugadores);
+    socket.on("juego:iniciado", onIniciado);
     return () => {
       socket.off("estado", onEstado);
       socket.off("fin-partida", onFin);
       socket.off("lobby:jugadores", onJugadores);
+      socket.off("juego:iniciado", onIniciado);
     };
   }, []);
 
@@ -155,7 +164,7 @@ export default function App() {
       </header>
 
       {!lobby && <LobbyBrowser nombreJugador={user.name} onEntrarLobby={entrarLobby} onEspectar={espectarLobby} />}
-      {lobby && !enJuego && !esEspectador && <WaitingRoom lobby={lobby} onIniciar={() => setEnJuego(true)} />}
+      {lobby && !enJuego && !esEspectador && <WaitingRoom lobby={lobby} />}
       {lobby && !enJuego && esEspectador && <p className="panel" style={{ textAlign: "center" }}>Esperando a que la mesa <b>{lobby.nombre}</b> arranque...</p>}
       {lobby && enJuego && (
         <GameTable

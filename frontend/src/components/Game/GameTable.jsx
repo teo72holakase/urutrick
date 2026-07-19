@@ -6,7 +6,6 @@ import TurnTimer from "./TurnTimer";
 const NIVEL_TEXTO = { truco: "Truco", retruco: "Retruco", vale4: "Vale 4" };
 const SIGUIENTE_NIVEL = { 0: "truco", 1: "retruco", 2: "vale4" };
 const ETIQUETA_ENVIDO = { envido: "Envido", "real-envido": "Real Envido", "falta-envido": "Falta Envido" };
-const nombreCanto = (nivel) => ETIQUETA_ENVIDO[nivel] || NIVEL_TEXTO[nivel] || (nivel || "").replace(/-/g, " ");
 
 // Reparte a los jugadores en un damero alrededor de la mesa: 2v2 [AB / BA],
 // 3v3 [ABA / BAB]. "Yo" quedo en la fila de abajo, mis compañeros en diagonal
@@ -394,12 +393,6 @@ export default function GameTable({ lobby, userId, esEspectador = false, estado,
             {revelDone
               ? `${nombreEquipo(estado.revelacionEnvido.ganador)} ganó el envido (+${estado.revelacionEnvido.puntos})`
               : "🗣️ Cantando los tantos…"}
-          </div>
-        )}
-        {!esEspectador && !enRevelacion && !estado.manoTerminada && cantoPendiente && (
-          <div className="banner-canto">
-            Canto: <b>{nombreCanto(estado.estadoCanto.nivel)}</b>
-            {!puedoResponderCanto && " — esperando respuesta del rival…"}
           </div>
         )}
       </div>

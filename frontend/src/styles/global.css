@@ -239,10 +239,6 @@ input, select {
 
 /* Mensajes siempre arriba de la mesa */
 .mensajes-arriba { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.5rem; }
-.banner-canto {
-  background: var(--panel); border: 2px solid var(--madera-3);
-  color: var(--texto); text-align: center; padding: 0.45rem 1rem; border-radius: 8px;
-}
 
 /* Controles a la izquierda, mesa a la derecha */
 .mesa-y-controles { display: flex; align-items: flex-start; gap: 0.6rem; }
