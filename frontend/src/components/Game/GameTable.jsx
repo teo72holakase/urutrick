@@ -145,7 +145,8 @@ function HistorialBazas({ estado, jugadores, esUno }) {
   );
 }
 
-export default function GameTable({ lobby, userId, esEspectador = false, espectadoresCount = 0, estado, finPartida, onVolverMenu }) {
+export default function GameTable({ lobby, userId, esEspectador = false, espectadoresCount = 0, estado: estadoProp, finPartida, onVolverMenu }) {
+  const [estado, setEstado] = useState(estadoProp);
   const [recogiendo, setRecogiendo] = useState(false);
   const [cuentaMano, setCuentaMano] = useState(6);
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
@@ -167,13 +168,12 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
     return () => clearTimeout(t);
   }, [accionSrc?.id]);
 
-  // Al irse alguien al mazo, sus cartas (las de su equipo) "vuelan" hacia el mazo.
+  // Al irse alguien al mazo, sus cartas (las de su equipo) "vuelan" hacia el mazo
+  // y quedan así (no reaparecen) hasta que arranca la mano siguiente.
   useEffect(() => {
     if (!accionSrc || accionSrc.texto !== "Me voy al mazo") return;
     const equipo = lobby.jugadores.find((j) => j.id === accionSrc.jugadorId)?.equipo;
     setMazoAnim({ id: accionSrc.id, equipo });
-    const t = setTimeout(() => setMazoAnim((m) => (m?.id === accionSrc.id ? null : m)), 1200);
-    return () => clearTimeout(t);
   }, [accionSrc?.id]);
 
   // Mensaje temporal arriba (ej: "+3 de flor para X") durante ~3s.
@@ -207,13 +207,20 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
   }, [revel?.id]);
 
   useEffect(() => {
-    if (!estado) return;
-    if (manoIndexRef.current !== null && manoIndexRef.current !== estado.manoIndex) {
+    if (!estadoProp) return;
+    if (manoIndexRef.current !== null && manoIndexRef.current !== estadoProp.manoIndex) {
+      manoIndexRef.current = estadoProp.manoIndex;
       setRecogiendo(true);
-      setTimeout(() => setRecogiendo(false), 500);
+      const t = setTimeout(() => {
+        setRecogiendo(false);
+        setMazoAnim(null); // recién acá se limpia: así el "irse al mazo" no reaparece antes de tiempo
+        setEstado(estadoProp); // recién ahora mostramos la mano nueva → el reparto no choca con "recoger"
+      }, 480);
+      return () => clearTimeout(t);
     }
-    manoIndexRef.current = estado.manoIndex;
-  }, [estado?.manoIndex]);
+    manoIndexRef.current = estadoProp.manoIndex;
+    setEstado(estadoProp);
+  }, [estadoProp]);
 
   useEffect(() => {
     clearInterval(cuentaRef.current);

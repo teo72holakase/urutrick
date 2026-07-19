@@ -41,6 +41,7 @@ export class GameEngine {
     this.florResuelta = false;
     this.revelacionEnvido = null; // sub-estado FASE_ENVIDO: canto de tantos en curso
     this.florCanto = null; // sub-estado de flor cuando ambos equipos tienen flor
+    this.trucoPendienteGuardado = null; // truco pausado por interjección de envido ("el envido va primero")
     this.accionReciente = null; // burbuja de acción sobre un jugador ({id, jugadorId, texto})
     this.avisoTop = null; // mensaje temporal arriba ({id, texto})
     this.manoTerminada = false;
@@ -228,15 +229,11 @@ export class GameEngine {
   }
 
   envidoDisponible(jugadorId) {
-    // Se puede cantar durante la primera ronda (primera baza) SOLO si quien canta
-    // no jugó todavía ninguna carta. Deja de estar disponible en la 2da ronda
-    // (this.bazas.length > 0), si ya se resolvió, si hay revelación en curso o si
-    // hay una flor sin resolver todavía.
+    // Se puede cantar durante la primera ronda (antes de que se jueguen 2 cartas)
+    // sin importar de quién sea el turno ni quién sea mano.
     if (this.envidoResuelto || this.bazas.length !== 0 || this.bazaPendiente || this.revelacionEnvido) return false;
     if (this.algunTieneFlorSinResolver()) return false;
     if (jugadorId && this.haJugadoCarta(jugadorId)) return false;
-    // Solo el jugador que tiene el turno puede iniciar el canto de envido.
-    if (jugadorId && this.jugadorActual()?.id !== jugadorId) return false;
     return true;
   }
 
@@ -278,6 +275,12 @@ export class GameEngine {
     }
     if (this.haJugadoCarta(jugadorId)) throw new Error("No podés cantar envido: ya jugaste una carta en la ronda");
     if (!this.envidoDisponible(jugadorId)) throw new Error("Ya no se puede cantar envido en esta mano");
+    // "El envido va primero": si había un truco cantado sin responder, se pausa
+    // (queda guardado) hasta que el envido se resuelva del todo.
+    if (ec && ec.tipo === "truco" && !ec.respondido) {
+      this.trucoPendienteGuardado = ec;
+      this.avisar("El envido va primero");
+    }
     const cadena = [tipo];
     this.estadoCanto = {
       tipo: "envido",
@@ -357,6 +360,7 @@ export class GameEngine {
     if (!quiero) {
       this.registrarPuntos(ec.equipoQueCanto, ec.acumuladoNoQuerido, `${ec.nivel.replace(/-/g, " ")} no querido`);
       this.estadoCanto = null;
+      if (this.trucoPendienteGuardado) { this.estadoCanto = this.trucoPendienteGuardado; this.trucoPendienteGuardado = null; }
       return { quiero, ganador: null };
     }
     const { ganador, mejorA, mejorB } = this.resolverGanadorEnvido();
@@ -398,6 +402,10 @@ export class GameEngine {
 
   finalizarRevelacionEnvido() {
     this.revelacionEnvido = null;
+    if (this.trucoPendienteGuardado) {
+      this.estadoCanto = this.trucoPendienteGuardado;
+      this.trucoPendienteGuardado = null;
+    }
   }
 
   // --- Flor ---
