@@ -40,11 +40,10 @@ function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, j
           {cantoPunto}
         </div>
       )}
-      <div className="nombre-jugador">
+      <div className={`nombre-jugador${(!estado.bazaPendiente && estado.turno === j.id) ? " nombre-en-turno" : ""}`}>
         {esModoEquipos && <span className={`letra-equipo letra-${j.equipo.toLowerCase()}`}>{j.equipo}</span>}
         <span>{j.nombre}</span>
         {lobby.jugadores[estado.manoIndex]?.id === j.id && <span className="icono-mano" title="Es mano">M</span>}
-        {!estado.bazaPendiente && estado.turno === j.id && <span className="icono-turno" title="Turno">👉</span>}
       </div>
       {esTurnoJugar && (
         <div className="barra-turno" title="Tiempo para jugar">
@@ -289,11 +288,17 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
   }
   const miEquipo = jugadores.find((j) => j.id === userId)?.equipo || "A";
   const cantoPendiente = estado.estadoCanto && !estado.estadoCanto.respondido;
-  const puedoResponderCanto = !esEspectador && cantoPendiente && estado.estadoCanto.equipoQueResponde === miEquipo;
+  // En 2v2/3v3 para el truco: solo puede responder el jugador de la derecha del cantante (trucoRespondeId)
+  const puedoResponderCanto = !esEspectador && cantoPendiente && estado.estadoCanto.equipoQueResponde === miEquipo
+    && (esUno || estado.estadoCanto.tipo !== "truco" || !estado.trucoRespondeId || estado.trucoRespondeId === userId);
   const nombreEquipoA = esUno ? (jugadores.find((j) => j.equipo === "A")?.nombre || "Equipo A") : "Equipo A";
   const nombreEquipoB = esUno ? (jugadores.find((j) => j.equipo === "B")?.nombre || "Equipo B") : "Equipo B";
   const nombreEquipo = (eq) => (eq === "A" ? nombreEquipoA : eq === "B" ? nombreEquipoB : eq);
-  const puedoCantarTruco = !esEspectador && !cantoPendiente && !enRevelacion && !estado.bazaPendiente && !estado.manoTerminada && estado.trucoNivel < 3 && estado.trucoPalabra === miEquipo;
+  // En equipos: para el primer canto solo el jugador del turno; para revirar,
+  // solo el trucoCantanteId asignado por el backend.
+  const puedoCantarTruco = !esEspectador && !cantoPendiente && !enRevelacion && !estado.bazaPendiente && !estado.manoTerminada
+    && estado.trucoNivel < 3 && estado.trucoPalabra === miEquipo
+    && (esUno || (estado.trucoNivel === 0 ? estado.turno === userId : estado.trucoCantanteId === userId));
   const puedoIrseAlMazo = !esEspectador && !cantoPendiente && !enRevelacion && !estado.bazaPendiente && !estado.manoTerminada;
   const revelDone = enRevelacion && revelCount >= ((estado.revelacionEnvido.orden || []).length);
 
@@ -394,7 +399,11 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
       )}
       <div className="marcador-fila">
         <span className="marcador">{nombreEquipoA}: {estado.puntos.A} pts</span>
-        <TurnTimer activo={esMiTurno && !cantoPendiente} segundos={20} resetKey={estado.turno} />
+        <TurnTimer
+          activo={(esMiTurno && !cantoPendiente) || (puedoResponderCanto && !enRevelacion && !estado.manoTerminada)}
+          segundos={puedoResponderCanto ? 10 : 20}
+          resetKey={puedoResponderCanto ? `canto-${estado.estadoCanto?.nivel}-${estado.turno}` : estado.turno}
+        />
         <span className="marcador">{nombreEquipoB}: {estado.puntos.B} pts</span>
       </div>
       <p className="texto-suave" style={{ textAlign: "center", margin: "0 0 0.5rem" }}>

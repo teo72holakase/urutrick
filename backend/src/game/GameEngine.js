@@ -37,6 +37,9 @@ export class GameEngine {
     this.estadoCanto = null;
     this.trucoNivel = 0;
     this.trucoPalabra = this.equipoDe(jugadores[this.manoIndex].id); // quién puede cantar/subir el truco
+    // En 2v2/3v3: control por jugador específico (no solo equipo)
+    this.trucoCantanteId = jugadores[this.manoIndex].id; // jugador que puede cantar/revirar ahora
+    this.trucoRespondeId = null; // jugador que debe responder (derecha del cantante)
     this.envidoResuelto = false;
     this.florResuelta = false;
     this.revelacionEnvido = null; // sub-estado FASE_ENVIDO: canto de tantos en curso
@@ -174,9 +177,39 @@ export class GameEngine {
     const contarEquipo = (eq) => this.bazas.filter((b) => b.equipoGanador === eq).length;
     const a = contarEquipo("A"), b = contarEquipo("B");
     let ganador = null;
+
     if (a >= 2) ganador = "A";
     else if (b >= 2) ganador = "B";
-    else if (this.bazas.length === 3) ganador = a > b ? "A" : b > a ? "B" : this.bazas[0].equipoGanador;
+    else if (this.bazas.length >= 2) {
+      const b1 = this.bazas[0];
+      const b2 = this.bazas[1];
+      // Parda en 1ra + alguien gana la 2da → gana el de la 2da de inmediato
+      if (b1.equipoGanador === "parda" && b2.equipoGanador !== "parda") {
+        ganador = b2.equipoGanador;
+      }
+      // Alguien gana la 1ra + parda en 2da → gana el de la 1ra de inmediato
+      else if (b1.equipoGanador !== "parda" && b2.equipoGanador === "parda") {
+        ganador = b1.equipoGanador;
+      }
+      // Empate real (1-1) después de 2 bazas: se juega la 3ra
+    }
+
+    // 3ra baza
+    if (!ganador && this.bazas.length === 3) {
+      const b3 = this.bazas[2];
+      if (b3.equipoGanador !== "parda") {
+        // Gana quien ganó más bazas; si empate 1-1 gana quien ganó la 1ra
+        ganador = a > b ? "A" : b > a ? "B" : this.bazas[0].equipoGanador;
+      } else {
+        // 3ra también parda: empate total → gana el equipo de la mano
+        if (a === b) {
+          ganador = this.equipoDe(this.jugadoresOrdenados()[this.manoIndex].id);
+        } else {
+          ganador = a > b ? "A" : "B";
+        }
+      }
+    }
+
     if (ganador) {
       const motivo = this.trucoNivel > 0 ? NIVELES_TRUCO[this.trucoNivel - 1] : "mano";
       const puntos = this.trucoNivel > 0 ? PUNTOS_TRUCO[motivo] : 1;
@@ -194,8 +227,32 @@ export class GameEngine {
     if (this.trucoNivel >= 3) throw new Error("Ya está en vale4");
     const equipo = this.equipoDe(jugadorId);
     if (equipo !== this.trucoPalabra) throw new Error("No tenés la palabra para cantar truco");
+
+    // En 2v2/3v3: solo puede cantar/revirar el jugador específico con trucoCantanteId.
+    // Para el primer canto (nivel 0) también puede ser el jugador del turno actual.
+    if (this.lobby.modo !== "1v1") {
+      const esPrimerCanto = this.trucoNivel === 0;
+      const esTurnoActual = this.jugadorActual().id === jugadorId;
+      const esCantanteAsignado = this.trucoCantanteId === jugadorId;
+      if (!esCantanteAsignado && !(esPrimerCanto && esTurnoActual)) {
+        throw new Error("Solo el jugador con el turno puede cantar o revirar el truco");
+      }
+      // Si fue el turno actual quien inició, actualizar trucoCantanteId
+      if (esPrimerCanto && esTurnoActual) this.trucoCantanteId = jugadorId;
+    }
+
     this.trucoNivel += 1;
     const equipoRival = this.rivalDe(equipo);
+
+    // Calcular quién debe responder: el jugador inmediatamente a la derecha del cantante
+    const jugadores = this.jugadoresOrdenados();
+    const callerIdx = jugadores.findIndex((j) => j.id === jugadorId);
+    const responderIdx = (callerIdx + 1) % jugadores.length;
+    this.trucoRespondeId = jugadores[responderIdx].id;
+    // Próximo cantante (si el respondedor escala): el de la derecha del respondedor
+    const nextCantanteIdx = (responderIdx + 1) % jugadores.length;
+    this.trucoCantanteId = jugadores[nextCantanteIdx].id;
+
     this.estadoCanto = { tipo: "truco", nivel: NIVELES_TRUCO[this.trucoNivel - 1], equipoQueCanto: equipo, equipoQueResponde: equipoRival, respondido: false };
     this.registrarAccion(jugadorId, TEXTO_TRUCO[NIVELES_TRUCO[this.trucoNivel - 1]]);
     return this.estadoCanto;
@@ -204,20 +261,27 @@ export class GameEngine {
   responderTruco(jugadorId, quiero) {
     if (!this.estadoCanto || this.estadoCanto.tipo !== "truco") throw new Error("No hay truco pendiente");
     if (this.equipoDe(jugadorId) === this.estadoCanto.equipoQueCanto) throw new Error("No podés responder tu propio canto");
+    // En 2v2/3v3: solo puede responder el jugador de la derecha del cantante
+    if (this.lobby.modo !== "1v1" && this.trucoRespondeId && jugadorId !== this.trucoRespondeId) {
+      throw new Error("No te corresponde responder este truco");
+    }
     const equipoQueCanto = this.estadoCanto.equipoQueCanto;
     const equipoQueResponde = this.rivalDe(equipoQueCanto);
     this.estadoCanto.respondido = true;
     this.registrarAccion(jugadorId, quiero ? "Quiero" : "No quiero");
     if (!quiero) {
-      // Al no querer, los puntos en juego (los del nivel anterior) van a quien CANTÓ.
       const nivel = NIVELES_TRUCO[this.trucoNivel - 1];
       const puntosPrevios = this.trucoNivel <= 1 ? 1 : PUNTOS_TRUCO[NIVELES_TRUCO[this.trucoNivel - 2]];
       this.registrarPuntos(equipoQueCanto, puntosPrevios, `${nivel} no querido`);
       this.estadoCanto = null;
+      this.trucoRespondeId = null;
       this.cerrarMano(equipoQueCanto);
       return { quiero };
     }
-    this.trucoPalabra = equipoQueResponde; // ahora puede subir el equipo que acaba de decir "quiero"
+    this.trucoPalabra = equipoQueResponde;
+    // En 2v2/3v3: el respondedor puede ahora revirar (escalarTruco hace quiero+cantar juntos)
+    if (this.lobby.modo !== "1v1") this.trucoCantanteId = jugadorId;
+    this.trucoRespondeId = null;
     this.estadoCanto = null;
     return { quiero };
   }
@@ -299,8 +363,10 @@ export class GameEngine {
     return this.estadoCanto;
   }
 
-  // Gana el envido el puntaje más alto; en caso de empate gana el equipo del
-  // jugador "mano" (o el más cercano a la mano). Se recorre en orden de mano.
+  // Gana el envido el puntaje más alto; en caso de empate de puntaje máximo entre
+  // equipos, gana el equipo del jugador "mano" (el más cercano en orden de mano).
+  // El recorrido empieza desde manoIndex, por lo que el primer jugador en alcanzar
+  // el máximo (=el más cercano a la mano) queda asignado en ganador.
   resolverGanadorEnvido() {
     const jugadores = this.jugadoresOrdenados();
     const n = jugadores.length;
@@ -309,7 +375,13 @@ export class GameEngine {
       const j = jugadores[(this.manoIndex + k) % n];
       const val = this.calcularEnvidoJugador(j.id);
       if (j.equipo === "A") mejorA = Math.max(mejorA, val); else mejorB = Math.max(mejorB, val);
+      // Solo actualiza con estricto mayor: así en empate queda el más cercano a la mano
       if (val > mejorVal) { mejorVal = val; ganador = j.equipo; }
+    }
+    // Guardia extra: si ambos equipos tienen el mismo puntaje máximo y por alguna
+    // razón ganador quedó mal, corregir explícitamente a favor de la mano.
+    if (mejorA === mejorB && mejorA === mejorVal) {
+      ganador = this.equipoDe(jugadores[this.manoIndex].id);
     }
     return { ganador, mejorA, mejorB };
   }
@@ -571,6 +643,8 @@ export class GameEngine {
       puntos: this.puntos,
       trucoNivel: this.trucoNivel,
       trucoPalabra: this.trucoPalabra,
+      trucoCantanteId: this.trucoCantanteId,
+      trucoRespondeId: this.trucoRespondeId,
       estadoCanto: this.estadoCanto,
       revelacionEnvido: this.revelacionEnvido,
       accionReciente: this.accionReciente,

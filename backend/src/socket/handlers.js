@@ -200,7 +200,11 @@ function emitirEstado(io, lobby) {
 
 function armarTimerJugada(io, lobby) {
   timers.get(lobby.id)?.cancelar();
-  const timer = new TurnTimer(TIEMPOS.jugarCarta, () => {
+  const engine = lobby.engine;
+  // Usar timer corto (10s) cuando hay un canto pendiente de respuesta
+  const hayCantoPendiente = engine && engine.estadoCanto && !engine.estadoCanto.respondido;
+  const duracion = hayCantoPendiente ? TIEMPOS.responderCanto : TIEMPOS.jugarCarta;
+  const timer = new TurnTimer(duracion, () => {
     try {
       const engine = lobby.engine;
       if (!engine) return;
@@ -217,10 +221,12 @@ function armarTimerJugada(io, lobby) {
       }
       const ec = engine.estadoCanto;
       if (ec && !ec.respondido) {
-        // Responde automáticamente "no quiero" en nombre del equipo que debe responder
-        // (no necesariamente el del turno de la carta).
-        const respondedor = lobby.jugadores.find((j) => engine.equipoDe(j.id) === ec.equipoQueResponde)?.id
-          || engine.jugadorActual()?.id;
+        // Responde automáticamente "no quiero" en nombre del jugador que debe responder.
+        // En 2v2/3v3 usa trucoRespondeId si está definido; si no, el primero del equipo.
+        const respondedor = (ec.tipo === "truco" && engine.trucoRespondeId)
+          ? engine.trucoRespondeId
+          : (lobby.jugadores.find((j) => engine.equipoDe(j.id) === ec.equipoQueResponde)?.id
+            || engine.jugadorActual()?.id);
         if (!respondedor) return;
         if (ec.tipo === "truco") engine.responderTruco(respondedor, false);
         else if (ec.tipo === "flor") engine.responderFlor(respondedor, false);
