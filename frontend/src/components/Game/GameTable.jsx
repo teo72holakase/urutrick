@@ -7,9 +7,6 @@ const NIVEL_TEXTO = { truco: "Truco", retruco: "Retruco", vale4: "Vale 4" };
 const SIGUIENTE_NIVEL = { 0: "truco", 1: "retruco", 2: "vale4" };
 const ETIQUETA_ENVIDO = { envido: "Envido", "envido-envido": "5 Envido", "real-envido": "Real Envido", "falta-envido": "Falta Envido" };
 
-// Reparte a los jugadores en un damero alrededor de la mesa: 2v2 [AB / BA],
-// 3v3 [ABA / BAB]. "Yo" quedo en la fila de abajo, mis compañeros en diagonal
-// y los rivales intercalados. Para espectador se usa el equipo A como referencia.
 function distribuirAsientos(jugadores, userId, modo, esEspectador) {
   const equipos = { A: [], B: [] };
   jugadores.forEach((j) => equipos[j.equipo]?.push(j));
@@ -63,12 +60,13 @@ function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, j
   );
 }
 
-function CartaCentral({ cj, jugadores }) {
+function CartaCentral({ cj, jugadores, esParda }) {
   if (!cj) return <div className="carta-hueco" />;
-  const nombreJ = jugadores.find((j) => j.id === cj.jugadorId)?.nombre || "";
+  const nombreJ = jugadores.find((p) => p.id === cj.jugadorId)?.nombre || "";
+  const esGanadora = !esParda && cj.esGanadora;
   return (
     <div className="carta-jugada-anim">
-      <PlayingCard carta={cj.carta} />
+      <PlayingCard carta={cj.carta} className={esGanadora || esParda ? 'carta-ganadora-borde' : ''} />
       <div className="etiqueta-jugada">{nombreJ}</div>
     </div>
   );
@@ -93,8 +91,6 @@ function CartaFrente({ cj }) {
   );
 }
 
-// Una baza ya jugada: todas las cartas apiladas con la ganadora encima de la(s)
-// perdedora(s), y debajo el jugador (1v1) o el equipo (2v2/3v3) que la ganó.
 function PilaBaza({ baza, jugadores, esUno }) {
   const jugadas = [...(baza.jugadas || [])].sort(
     (a, b) => (a.jugadorId === baza.ganadorId ? 1 : 0) - (b.jugadorId === baza.ganadorId ? 1 : 0)
@@ -106,21 +102,26 @@ function PilaBaza({ baza, jugadores, esUno }) {
   const ancho = CARTA_W + (n - 1) * offX;
   const alto = CARTA_H + (n - 1) * offY;
   let etiqueta;
-  if (baza.equipoGanador === "parda") etiqueta = "Parda";
+  const esParda = baza.equipoGanador === "parda";
+  if (esParda) etiqueta = "Parda";
   else if (esUno) etiqueta = jugadores.find((j) => j.id === baza.ganadorId)?.nombre || "";
   else etiqueta = `Equipo ${baza.equipoGanador}`;
   return (
     <div className="baza-item">
       <div className="baza-pila" style={{ height: `${alto}px`, width: `${ancho}px` }}>
-        {jugadas.map((jg, i) => (
-          <div
-            key={jg.carta.id}
-            className={`baza-carta ${jg.jugadorId === baza.ganadorId ? "ganadora" : ""}`}
-            style={{ left: `${i * offX}px`, top: `${i * offY}px`, zIndex: i }}
-          >
-            <PlayingCard carta={jg.carta} className="carta-mini" />
-          </div>
-        ))}
+        {jugadas.map((jg, i) => {
+          const esGanadora = !esParda && jg.jugadorId === baza.ganadorId;
+          const esPardaGanadora = esParda;
+          return (
+            <div
+              key={jg.carta.id}
+              className={`baza-carta ${esGanadora || esPardaGanadora ? "ganadora" : ""}`}
+              style={{ left: `${i * offX}px`, top: `${i * offY}px`, zIndex: i }}
+            >
+              <PlayingCard carta={jg.carta} className={`carta-mini ${esGanadora || esPardaGanadora ? 'carta-ganadora-borde' : ''}`} />
+            </div>
+          );
+        })}
       </div>
       <div className="baza-ganador">{etiqueta}</div>
     </div>
@@ -284,7 +285,12 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
     && estado.trucoNivel < 3 && estado.trucoPalabra === miEquipo
     && (esUno || estado.turno === userId || (estado.trucoCantanteId === userId && estado.trucoPuedeEscalarAhora));
 
-  const puedoIrseAlMazo = !esEspectador && !cantoPendiente && !enRevelacion && !estado.bazaPendiente && !estado.manoTerminada;
+  // "Irse al mazo" solo si es tu turno y no hay otras condiciones que lo impidan
+  const puedoIrseAlMazo = !esEspectador && !cantoPendiente && !enRevelacion && !estado.bazaPendiente && !estado.manoTerminada && esMiTurno;
+
+  // "Envido" solo si está disponible y es tu turno
+  const envidoDisponible = !esEspectador && estado.envidoDisponible && esMiTurno;
+
   const revelDone = enRevelacion && revelCount >= ((estado.revelacionEnvido.orden || []).length);
 
   function jugarCarta(cartaId) { if (!esEspectador) socket.emit("juego:jugar-carta", { lobbyId: lobby.id, cartaId }); }
@@ -323,8 +329,35 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
     const cartasJugadas = estado.cartasJugadas || [];
     const bazas = estado.bazas || [];
     
-    // Si no hay cartas jugadas, mostrar la última baza
-    if (cartasJugadas.length === 0 && bazas.length > 0) {
+    // Si hay cartas jugadas actualmente (baza en curso)
+    if (cartasJugadas.length > 0) {
+      // Determinar si la baza ya está resuelta (última baza guardada y no hay cartas jugadas actuales en juego)
+      const ultimaBaza = bazas.length > 0 ? bazas[bazas.length - 1] : null;
+      const esParda = ultimaBaza && ultimaBaza.equipoGanador === "parda" && cartasJugadas.length === 0;
+      
+      return (
+        <div className="cartas-en-mesa">
+          {cartasJugadas.map((j, idx) => {
+            const esGanadora = ultimaBaza && ultimaBaza.ganadorId === j.jugadorId && !esParda;
+            return (
+              <div key={idx} className="carta-jugada-anim">
+                <PlayingCard 
+                  carta={j.carta} 
+                  className={esGanadora ? 'carta-ganadora-borde' : ''}
+                />
+                <div className="etiqueta-jugada">
+                  {jugadores.find((p) => p.id === j.jugadorId)?.nombre || ""}
+                </div>
+              </div>
+            );
+          })}
+          {esParda && <div className="banner-parda">🟡 ¡PARDA!</div>}
+        </div>
+      );
+    }
+    
+    // Si no hay cartas jugadas, mostrar la última baza si existe
+    if (bazas.length > 0) {
       const ultimaBaza = bazas[bazas.length - 1];
       const esParda = ultimaBaza.equipoGanador === "parda";
       return (
@@ -349,33 +382,7 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
       );
     }
     
-    // Cartas actuales en juego
-    if (cartasJugadas.length === 0) return null;
-    
-    // Determinar si la baza actual es parda (solo si ya está resuelta)
-    const ultimaBaza = bazas.length > 0 ? bazas[bazas.length - 1] : null;
-    const esParda = ultimaBaza && ultimaBaza.equipoGanador === "parda" && cartasJugadas.length === 0;
-    
-    return (
-      <div className="cartas-en-mesa">
-        {cartasJugadas.map((j, idx) => {
-          // Si la baza está resuelta y hay ganador, mostrar ganadora
-          const esGanadora = ultimaBaza && ultimaBaza.ganadorId === j.jugadorId && !esParda;
-          return (
-            <div key={idx} className="carta-jugada-anim">
-              <PlayingCard 
-                carta={j.carta} 
-                className={esGanadora ? 'carta-ganadora-borde' : ''}
-              />
-              <div className="etiqueta-jugada">
-                {jugadores.find((p) => p.id === j.jugadorId)?.nombre || ""}
-              </div>
-            </div>
-          );
-        })}
-        {esParda && <div className="banner-parda">🟡 ¡PARDA!</div>}
-      </div>
-    );
+    return null;
   };
 
   // --- RENDER DE LA MESA ---
@@ -503,7 +510,7 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
               <button className="btn btn-general" disabled={!puedoCantarTruco} onClick={cantarTruco}>
                 {NIVEL_TEXTO[SIGUIENTE_NIVEL[estado.trucoNivel]] || "Truco"}
               </button>
-              <MenuEnvido disabled={!estado.envidoDisponible} onElegir={cantarEnvido} />
+              <MenuEnvido disabled={!envidoDisponible} onElegir={cantarEnvido} />
               {(estado.florInicial || estado.florDeclarar) && <button className="btn" onClick={() => cantarFlor("flor")}>🌸 Flor</button>}
               {estado.florOpcion && <button className="btn" onClick={() => cantarFlor("contraflor-al-resto")}>Contra flor al resto</button>}
               {estado.florOpcion && <button className="btn btn-secundario" onClick={() => cantarFlor("con-flor-quiero")}>Con flor, quiero</button>}

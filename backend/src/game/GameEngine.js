@@ -125,6 +125,8 @@ export class GameEngine {
   }
 
   irseAlMazo(jugadorId) {
+    // VALIDACIÓN: Solo si es tu turno
+    if (this.jugadorActual().id !== jugadorId) throw new Error("No es tu turno para irte al mazo");
     if (this.revelacionEnvido) throw new Error("Fase de envido en curso");
     if (this.florCanto) throw new Error("Hay una flor pendiente");
     if (this.manoTerminada) throw new Error("La mano ya terminó");
@@ -165,28 +167,46 @@ export class GameEngine {
     const a = contarEquipo("A"), b = contarEquipo("B");
     let ganador = null;
 
+    // Caso 1: Alguien ganó 2 bazas
     if (a >= 2) ganador = "A";
     else if (b >= 2) ganador = "B";
     else if (this.bazas.length >= 2) {
       const b1 = this.bazas[0];
       const b2 = this.bazas[1];
+      
+      // Caso 2: Parda + Alguien gana → gana el de la segunda
       if (b1.equipoGanador === "parda" && b2.equipoGanador !== "parda") {
         ganador = b2.equipoGanador;
-      } else if (b1.equipoGanador !== "parda" && b2.equipoGanador === "parda") {
+      }
+      // Caso 3: Alguien gana + Parda → gana el de la primera
+      else if (b1.equipoGanador !== "parda" && b2.equipoGanador === "parda") {
         ganador = b1.equipoGanador;
+      }
+      // Caso 4: Parda + Parda → gana el equipo de la mano
+      else if (b1.equipoGanador === "parda" && b2.equipoGanador === "parda") {
+        ganador = this.equipoDe(this.jugadoresOrdenados()[this.manoIndex].id);
       }
     }
 
+    // Caso 5: Gana A + Gana B + Parda → gana el de la primera (A)
     if (!ganador && this.bazas.length === 3) {
+      const b1 = this.bazas[0];
+      const b2 = this.bazas[1];
       const b3 = this.bazas[2];
-      if (b3.equipoGanador !== "parda") {
-        ganador = a > b ? "A" : b > a ? "B" : this.bazas[0].equipoGanador;
-      } else {
-        if (a === b) {
-          ganador = this.equipoDe(this.jugadoresOrdenados()[this.manoIndex].id);
-        } else {
-          ganador = a > b ? "A" : "B";
-        }
+      
+      // Si la tercera es parda y las dos primeras tienen ganadores distintos
+      if (b3.equipoGanador === "parda" && b1.equipoGanador !== "parda" && b2.equipoGanador !== "parda" && b1.equipoGanador !== b2.equipoGanador) {
+        ganador = b1.equipoGanador; // Gana el de la primera
+      }
+      // Si la tercera no es parda, gana quien tiene más bazas o el de la primera si empatan
+      else if (b3.equipoGanador !== "parda") {
+        ganador = a > b ? "A" : b > a ? "B" : b1.equipoGanador;
+      }
+      // Si la tercera es parda y hay un ganador claro
+      else if (b3.equipoGanador === "parda") {
+        if (a > b) ganador = "A";
+        else if (b > a) ganador = "B";
+        else ganador = b1.equipoGanador; // Empate 1-1, gana el de la primera
       }
     }
 
@@ -282,6 +302,8 @@ export class GameEngine {
   }
 
   envidoDisponible(jugadorId) {
+    // VALIDACIÓN: Solo se puede cantar envido si es tu turno
+    if (this.jugadorActual().id !== jugadorId) return false;
     if (this.envidoResuelto || this.bazas.length !== 0 || this.bazaPendiente || this.revelacionEnvido) return false;
     if (this.algunTieneFlorSinResolver()) return false;
     if (jugadorId && this.haJugadoCarta(jugadorId)) return false;
