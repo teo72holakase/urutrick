@@ -24,13 +24,6 @@ function emitirA(io, userId, evento, payload) {
   if (sid) io.to(sid).emit(evento, payload);
 }
 
-// El lobby interno tiene lobby.engine, que a su vez tiene engine.lobby (referencia
-// circular). Mandarlo tal cual en un ack de socket.io revienta la serialización
-// JSON silenciosamente: el uncaughtException global de server.js la atrapa y el
-// callback del cliente NUNCA llega a dispararse. Esto es lo que rompía "Espectar"
-// en mesas ya iniciadas (y, en teoría, cualquier reconexión post-inicio): el
-// servidor sí lo daba de alta, pero el cliente se quedaba esperando para siempre
-// una respuesta que nunca salía del server.
 function lobbyPublico(lobby) {
   const { engine, ...resto } = lobby;
   return resto;
@@ -41,9 +34,9 @@ function programarSiguienteMano(io, lobby) {
   const handle = setTimeout(() => {
     sigManoTimers.delete(lobby.id);
     try {
-      if (!lobby.engine) return; // la mesa pudo limpiarse mientras esperaba
+      if (!lobby.engine) return;
       lobby.engine.siguienteMano();
-      lobby._manoContada = false; // arranca una mano nueva: habilita contar su ganador
+      lobby._manoContada = false;
       emitirEstado(io, lobby);
       armarTimerJugada(io, lobby);
     } catch (e) {
@@ -53,8 +46,6 @@ function programarSiguienteMano(io, lobby) {
   sigManoTimers.set(lobby.id, handle);
 }
 
-// Cierre de partida (por puntos o por abandono): avisa a la mesa, corta timers,
-// registra estadísticas y libera la mesa. Idempotente vía lobby.finalizada.
 function finalizarPartida(io, lobby, ganador) {
   if (lobby.finalizada) return;
   lobby.finalizada = true;
@@ -66,7 +57,6 @@ function finalizarPartida(io, lobby, ganador) {
   guardarHistorial(lobby, ganador).catch((e) => console.error("No se pudo guardar historial:", e.message));
   io.emit("lobby:actualizado", lobbyManager.listarPublicos());
   io.emit("stats:actualizado", leaderboard());
-  // Si nadie sale explícitamente (cierran la pestaña), igual liberamos la mesa a los 5 min.
   setTimeout(() => {
     io.to(lobby.id).emit("lobby:cerrada");
     lobbyManager.eliminar(lobby.id);
@@ -74,10 +64,6 @@ function finalizarPartida(io, lobby, ganador) {
   }, 5 * 60 * 1000);
 }
 
-// Gestiona los cierres automáticos de una mesa, cancelables si alguien reconecta:
-//  - Mesa INICIADA que queda con un solo jugador conectado -> gana el que quedó.
-//  - Mesa NO iniciada (sala de espera) sin nadie conectado -> se elimina para no
-//    dejar mesas fantasma en el browser.
 function verificarAbandono(io, lobby) {
   if (!lobby) return;
   const cancelar = () => {
@@ -105,8 +91,6 @@ function verificarAbandono(io, lobby) {
     return;
   }
 
-  // Mesa en sala de espera: si no queda NADIE conectado (ni jugadores ni
-  // espectadores), se elimina tras DELAY_ABANDONO.
   const espectConectados = (lobby.espectadores || []).filter((e) => conexiones.has(e.id));
   if (conectados.length === 0 && espectConectados.length === 0) {
     if (abandonoTimers.has(lobby.id)) return;
@@ -133,9 +117,6 @@ function lobbiesDeJugador(userId) {
   );
 }
 
-// Cuando ya se jugaron todas las cartas de la baza, primero se emite el estado
-// (así todos ven las cartas servidas en el centro de la mesa) y recién después,
-// con un pequeño delay, se resuelve la baza (se calcula ganador y se recogen).
 function programarResolucionBaza(io, lobby) {
   if (bazaTimers.has(lobby.id)) return;
   const handle = setTimeout(() => {
@@ -152,14 +133,9 @@ function programarResolucionBaza(io, lobby) {
   bazaTimers.set(lobby.id, handle);
 }
 
-// Tras un "quiero" de envido se entra en FASE_ENVIDO: se van cantando los tantos
-// (una burbuja cada DELAY_CANTO_ENVIDO ms en el cliente) y el juego queda pausado
-// hasta que se cierra la revelación y se retoma el turno normal.
 function programarFinRevelacionEnvido(io, lobby) {
   if (revelTimers.has(lobby.id)) return;
   const cantidad = lobby.engine.revelacionEnvido?.orden?.length || 1;
-  // El cliente hace una pausa inicial (DELAY_PRE_CANTO) antes de cantar el primer
-  // tanto; el timer del server debe contemplarla para no cortar la animación.
   const dur = DELAY_PRE_CANTO + cantidad * DELAY_CANTO_ENVIDO + 1200;
   const handle = setTimeout(() => {
     revelTimers.delete(lobby.id);
@@ -182,10 +158,7 @@ function emitirEstado(io, lobby) {
   for (const e of lobby.espectadores) {
     emitirA(io, e.id, "estado", lobby.engine.estadoPublico(e.id, true));
   }
-  // Durante la revelación de tantos (canto del envido) no se cierra la partida ni
-  // se pasa de mano: se deja correr toda la animación primero.
   if (lobby.engine.revelacionEnvido) return;
-  // Cuenta la mano ganada una sola vez, apenas termina (antes de saber si cierra la partida).
   if (lobby.engine.manoTerminada && lobby.engine.ganadorMano && !lobby._manoContada) {
     lobby._manoContada = true;
     registrarMano(lobby, lobby.engine.ganadorMano);
@@ -204,18 +177,13 @@ function emitirEstado(io, lobby) {
 function armarTimerJugada(io, lobby) {
   timers.get(lobby.id)?.cancelar();
   const engine = lobby.engine;
-  // Usar timer corto (10s) cuando hay un canto pendiente de respuesta
   const hayCantoPendiente = engine && engine.estadoCanto && !engine.estadoCanto.respondido;
   const duracion = hayCantoPendiente ? TIEMPOS.responderCanto : TIEMPOS.jugarCarta;
   const timer = new TurnTimer(duracion, () => {
     try {
       const engine = lobby.engine;
       if (!engine) return;
-      // No corresponde jugar/responder por timeout si la mano terminó, hay una baza
-      // pendiente de resolver o estamos en la revelación del envido.
       if (engine.manoTerminada || engine.bazaPendiente || engine.revelacionEnvido) return;
-      // Contienda de flor esperando declaración/opción (sin canto pendiente): se
-      // resuelve automáticamente por la flor más alta si nadie responde a tiempo.
       if (engine.florCanto && !engine.estadoCanto) {
         engine.resolverFlorContienda("flor");
         emitirEstado(io, lobby);
@@ -224,8 +192,6 @@ function armarTimerJugada(io, lobby) {
       }
       const ec = engine.estadoCanto;
       if (ec && !ec.respondido) {
-        // Responde automáticamente "no quiero" en nombre del jugador que debe responder.
-        // En 2v2/3v3 usa trucoRespondeId si está definido; si no, el primero del equipo.
         const respondedor = (ec.tipo === "truco" && engine.trucoRespondeId)
           ? engine.trucoRespondeId
           : (lobby.jugadores.find((j) => engine.equipoDe(j.id) === ec.equipoQueResponde)?.id
@@ -259,14 +225,12 @@ export function registrarHandlers(io, socket) {
   const userId = socket.handshake.auth?.userId || socket.id;
   socket.data.userId = userId;
   conexiones.set(userId, socket.id);
-  // Al (re)conectar, cancela un posible cierre por abandono de sus mesas.
   for (const l of lobbiesDeJugador(userId)) verificarAbandono(io, l);
 
   socket.on("lobby:listar", (cb) => cb(lobbyManager.listarPublicos()));
 
   socket.on("stats:leaderboard", (cb) => cb?.(leaderboard()));
 
-  // Info de una mesa puntual por su ID (para entrar directo por urutrick.vercel.app/{id})
   socket.on("lobby:info", (lobbyId, cb) => {
     const lobby = lobbyManager.get(lobbyId);
     if (!lobby) return cb?.({ ok: false, error: "Mesa no encontrada" });
@@ -301,7 +265,6 @@ export function registrarHandlers(io, socket) {
     } catch (e) { cb({ ok: false, error: e.message }); }
   });
 
-  // Espectar: no ocupa asiento, ve todas las cartas de todos los jugadores.
   socket.on("lobby:espectar", ({ lobbyId, nombre }, cb) => {
     try {
       const lobby = lobbyManager.espectar(lobbyId, { id: userId, nombre: nombre || "Espectador" });
@@ -312,7 +275,6 @@ export function registrarHandlers(io, socket) {
     } catch (e) { cb?.({ ok: false, error: e.message }); }
   });
 
-  // Reconexión tras refresh: el cliente guarda lobbyId en localStorage y reintenta esto al reconectar
   socket.on("lobby:reconectar", ({ lobbyId }, cb) => {
     try {
       const lobby = lobbyManager.get(lobbyId);
@@ -326,9 +288,6 @@ export function registrarHandlers(io, socket) {
     } catch (e) { cb?.({ ok: false, error: e.message }); }
   });
 
-  // Re-pedir el estado actual si al cliente no le llegó (típico en celular tras
-  // una reconexión: el "estado" se emitió al socket viejo). Se responde a ESTE
-  // socket directamente y se refresca el mapa de conexiones.
   socket.on("juego:pedir-estado", ({ lobbyId }, cb) => {
     try {
       const lobby = lobbyManager.get(lobbyId);
@@ -460,11 +419,8 @@ export function registrarHandlers(io, socket) {
     io.emit("lobby:actualizado", lobbyManager.listarPublicos());
   });
 
-  // OJO: en desconexión NO sacamos al jugador del lobby (permite reconectar tras refresh).
-  // Solo se libera el asiento con el evento explícito "lobby:salir".
   socket.on("disconnect", () => {
     if (conexiones.get(userId) === socket.id) conexiones.delete(userId);
-    // Si dejó una mesa iniciada con un solo jugador conectado, arranca el conteo de abandono.
     for (const l of lobbiesDeJugador(userId)) verificarAbandono(io, l);
   });
 }

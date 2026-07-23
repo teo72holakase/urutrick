@@ -18,7 +18,7 @@ function distribuirAsientos(jugadores, userId, modo, esEspectador) {
   const mios = equipos[miEquipo].slice();
   const rivales = equipos[miEquipo === "A" ? "B" : "A"].slice();
   const yoIdx = yo ? mios.findIndex((j) => j.id === yo.id) : 0;
-  const me = mios.splice(Math.max(0, yoIdx), 1)[0]; // saco "yo"; quedan los compañeros
+  const me = mios.splice(Math.max(0, yoIdx), 1)[0];
   const comp = mios;
   if (modo === "2v2") {
     return { top: [comp[0], rivales[0]], bottom: [rivales[1], me] };
@@ -29,8 +29,6 @@ function distribuirAsientos(jugadores, userId, modo, esEspectador) {
 function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, jugarCarta, lobby, recogiendo, esModoEquipos, bloqueado, cantoPunto, turnoKey, mazoAnim }) {
   const esYo = !esEspectador && j.id === userId;
   const slots = estado.manos[j.id] || [];
-  // Turno activo para jugar carta (no durante baza pendiente, mano terminada,
-  // revelación de tantos ni con un canto sin responder): muestra la barrita.
   const esTurnoJugar = !estado.bazaPendiente && !estado.manoTerminada && !estado.revelacionEnvido && !cantoPendiente && estado.turno === j.id;
   const alMazo = mazoAnim && mazoAnim.equipo === j.equipo;
   return (
@@ -52,7 +50,7 @@ function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, j
       )}
       <div className={`fila-cartas ${recogiendo ? "recogiendo" : ""} ${alMazo ? "al-mazo" : ""}`}>
         {slots.map((slot, i) => {
-          if (slot && slot.jugada) return null; // ya jugada: no reserva espacio, así lo que queda se recentra
+          if (slot && slot.jugada) return null;
           const carta = slot;
           return (
             <div key={carta?.id || `${j.id}-${i}`} className="carta-repartida" style={{ animationDelay: `${i * 0.13}s` }}>
@@ -76,7 +74,6 @@ function CartaCentral({ cj, jugadores }) {
   );
 }
 
-// Mazo + muestra, agrandados y centrados entre los dos jugadores/equipos.
 function MuestraCentral({ muestra }) {
   if (!muestra) return null;
   return (
@@ -87,7 +84,6 @@ function MuestraCentral({ muestra }) {
   );
 }
 
-// Carta que jugo un jugador, ubicada justo enfrente de su asiento (modo equipos).
 function CartaFrente({ cj }) {
   if (!cj) return <div className="carta-hueco carta-frente" />;
   return (
@@ -144,7 +140,6 @@ function HistorialBazas({ estado, jugadores, esUno }) {
   );
 }
 
-// Botón "Envido" con flecha desplegable: Envido, 5 Envido, Real Envido, Falta Envido.
 function MenuEnvido({ disabled, onElegir }) {
   const [abierto, setAbierto] = useState(false);
   const ref = useRef(null);
@@ -179,15 +174,13 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
   const [cuentaMano, setCuentaMano] = useState(6);
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
   const [revelCount, setRevelCount] = useState(0);
-  const [accion, setAccion] = useState(null); // burbuja de acción sobre un jugador
-  const [aviso, setAviso] = useState(null); // mensaje temporal arriba
-  const [mazoAnim, setMazoAnim] = useState(null); // animación de cartas yéndose al mazo
+  const [accion, setAccion] = useState(null);
+  const [aviso, setAviso] = useState(null);
+  const [mazoAnim, setMazoAnim] = useState(null);
   const manoIndexRef = useRef(null);
   const cuentaRef = useRef(null);
   const revelIntRef = useRef(null);
 
-  // Burbuja de acción ("Quiero", "Truco", "Me voy al mazo", "Flor"...) visible
-  // para todos durante ~3s sobre la cabeza del jugador que la emitió.
   const accionSrc = estado?.accionReciente || null;
   useEffect(() => {
     if (!accionSrc) return;
@@ -196,15 +189,12 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
     return () => clearTimeout(t);
   }, [accionSrc?.id]);
 
-  // Al irse alguien al mazo, sus cartas (las de su equipo) "vuelan" hacia el mazo
-  // y quedan así (no reaparecen) hasta que arranca la mano siguiente.
   useEffect(() => {
     if (!accionSrc || accionSrc.texto !== "Me voy al mazo") return;
     const equipo = lobby.jugadores.find((j) => j.id === accionSrc.jugadorId)?.equipo;
     setMazoAnim({ id: accionSrc.id, equipo });
   }, [accionSrc?.id]);
 
-  // Mensaje temporal arriba (ej: "+3 de flor para X") durante ~3s.
   const avisoSrc = estado?.avisoTop || null;
   useEffect(() => {
     if (!avisoSrc) return;
@@ -213,8 +203,6 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
     return () => clearTimeout(t);
   }, [avisoSrc?.id]);
 
-  // Canto de tantos: tras el "quiero" hay una pausa de ~1.8s (nadie canta) y
-  // recién ahí cada jugador de la secuencia "habla" una burbuja cada 2s.
   const revel = estado?.revelacionEnvido || null;
   useEffect(() => {
     clearInterval(revelIntRef.current);
@@ -241,8 +229,8 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
       setRecogiendo(true);
       const t = setTimeout(() => {
         setRecogiendo(false);
-        setMazoAnim(null); // recién acá se limpia: así el "irse al mazo" no reaparece antes de tiempo
-        setEstado(estadoProp); // recién ahora mostramos la mano nueva → el reparto no choca con "recoger"
+        setMazoAnim(null);
+        setEstado(estadoProp);
       }, 480);
       return () => clearTimeout(t);
     }
@@ -266,9 +254,6 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
   const enRevelacion = !!estado.revelacionEnvido;
   const esMiTurno = !esEspectador && estado.turno === userId && !estado.bazaPendiente && !enRevelacion && !estado.manoTerminada;
 
-  // Texto de la burbuja de tantos que corresponde a un jugador en este instante.
-  // Aparecen en orden (revelCount) y cada una queda hasta que aparezca un puntaje
-  // mayor posterior; "Son buenas" no revela número y se va apenas hay uno mayor.
   function cantoDeEnvido(jugadorId) {
     if (!enRevelacion) return null;
     const orden = estado.revelacionEnvido.orden || [];
@@ -281,25 +266,24 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
     }
     return orden[idx].texto;
   }
-  // Burbuja a mostrar sobre un jugador: prioridad al canto de tantos (revelación);
-  // si no, la acción reciente que emitió ese jugador.
+
   function burbujaDe(jugadorId) {
     return cantoDeEnvido(jugadorId) || (accion && accion.jugadorId === jugadorId ? accion.texto : null);
   }
+
   const miEquipo = jugadores.find((j) => j.id === userId)?.equipo || "A";
   const cantoPendiente = estado.estadoCanto && !estado.estadoCanto.respondido;
-  // En 2v2/3v3 para el truco: solo puede responder el jugador de la derecha del cantante (trucoRespondeId)
   const puedoResponderCanto = !esEspectador && cantoPendiente && estado.estadoCanto.equipoQueResponde === miEquipo
     && (esUno || estado.estadoCanto.tipo !== "truco" || !estado.trucoRespondeId || estado.trucoRespondeId === userId);
   const nombreEquipoA = esUno ? (jugadores.find((j) => j.equipo === "A")?.nombre || "Equipo A") : "Equipo A";
   const nombreEquipoB = esUno ? (jugadores.find((j) => j.equipo === "B")?.nombre || "Equipo B") : "Equipo B";
   const nombreEquipo = (eq) => (eq === "A" ? nombreEquipoA : eq === "B" ? nombreEquipoB : eq);
-  // En equipos: para el primer canto solo el jugador del turno; para revirar,
-  // solo el trucoCantanteId asignado por el backend.
+
   // En equipos: cantar truco requiere tener el turno; revirar requiere haber respondido "quiero" justo ahora
   const puedoCantarTruco = !esEspectador && !cantoPendiente && !enRevelacion && !estado.bazaPendiente && !estado.manoTerminada
     && estado.trucoNivel < 3 && estado.trucoPalabra === miEquipo
     && (esUno || estado.turno === userId || (estado.trucoCantanteId === userId && estado.trucoPuedeEscalarAhora));
+
   const puedoIrseAlMazo = !esEspectador && !cantoPendiente && !enRevelacion && !estado.bazaPendiente && !estado.manoTerminada;
   const revelDone = enRevelacion && revelCount >= ((estado.revelacionEnvido.orden || []).length);
 
@@ -330,45 +314,97 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
     );
   }
 
-  // Cambia en cada jugada para reiniciar la barrita de tiempo del turno.
   const turnoKey = `${estado.turno}-${estado.manoIndex}-${estado.bazas.length}-${estado.cartasJugadas.length}`;
   const asientoProps = { estado, userId, esEspectador, esMiTurno, cantoPendiente, jugarCarta, lobby, recogiendo, esModoEquipos: !esUno, bloqueado: enRevelacion, turnoKey, mazoAnim };
   let contenidoMesa;
+
+  // --- CARTAS EN MESA CON RESALTADO DE PARDA ---
+  const renderCartasEnMesa = () => {
+    const cartasJugadas = estado.cartasJugadas || [];
+    const bazas = estado.bazas || [];
+    
+    // Si no hay cartas jugadas, mostrar la última baza
+    if (cartasJugadas.length === 0 && bazas.length > 0) {
+      const ultimaBaza = bazas[bazas.length - 1];
+      const esParda = ultimaBaza.equipoGanador === "parda";
+      return (
+        <div className="cartas-en-mesa">
+          {ultimaBaza.jugadas.map((j, idx) => {
+            const esGanadora = !esParda && ultimaBaza.ganadorId === j.jugadorId;
+            const esPardaGanadora = esParda;
+            return (
+              <div key={idx} className="carta-jugada-anim">
+                <PlayingCard 
+                  carta={j.carta} 
+                  className={esGanadora || esPardaGanadora ? 'carta-ganadora-borde' : ''}
+                />
+                <div className="etiqueta-jugada">
+                  {jugadores.find((p) => p.id === j.jugadorId)?.nombre || ""}
+                </div>
+              </div>
+            );
+          })}
+          {esParda && <div className="banner-parda">🟡 ¡PARDA!</div>}
+        </div>
+      );
+    }
+    
+    // Cartas actuales en juego
+    if (cartasJugadas.length === 0) return null;
+    
+    // Determinar si la baza actual es parda (solo si ya está resuelta)
+    const ultimaBaza = bazas.length > 0 ? bazas[bazas.length - 1] : null;
+    const esParda = ultimaBaza && ultimaBaza.equipoGanador === "parda" && cartasJugadas.length === 0;
+    
+    return (
+      <div className="cartas-en-mesa">
+        {cartasJugadas.map((j, idx) => {
+          // Si la baza está resuelta y hay ganador, mostrar ganadora
+          const esGanadora = ultimaBaza && ultimaBaza.ganadorId === j.jugadorId && !esParda;
+          return (
+            <div key={idx} className="carta-jugada-anim">
+              <PlayingCard 
+                carta={j.carta} 
+                className={esGanadora ? 'carta-ganadora-borde' : ''}
+              />
+              <div className="etiqueta-jugada">
+                {jugadores.find((p) => p.id === j.jugadorId)?.nombre || ""}
+              </div>
+            </div>
+          );
+        })}
+        {esParda && <div className="banner-parda">🟡 ¡PARDA!</div>}
+      </div>
+    );
+  };
+
+  // --- RENDER DE LA MESA ---
   if (esUno && !esEspectador) {
     const rival = jugadores.find((j) => j.id !== userId);
     const yo = jugadores.find((j) => j.id === userId);
-    const cjRival = estado.cartasJugadas.find((cj) => cj.jugadorId === rival?.id);
-    const cjMia = estado.cartasJugadas.find((cj) => cj.jugadorId === yo?.id);
     contenidoMesa = (
       <div className="mesa-1v1">
         {rival && <Asiento j={rival} {...asientoProps} cantoPunto={burbujaDe(rival.id)} />}
         <div className="centro-mesa-vertical">
-          <CartaCentral cj={cjRival} jugadores={jugadores} />
+          {renderCartasEnMesa()}
           <MuestraCentral muestra={estado.muestra} />
-          <CartaCentral cj={cjMia} jugadores={jugadores} />
         </div>
         {yo && <Asiento j={yo} {...asientoProps} cantoPunto={burbujaDe(yo.id)} />}
       </div>
     );
   } else if (esUno && esEspectador) {
     const [j0, j1] = jugadores;
-    const cj0 = estado.cartasJugadas.find((cj) => cj.jugadorId === j0?.id);
-    const cj1 = estado.cartasJugadas.find((cj) => cj.jugadorId === j1?.id);
     contenidoMesa = (
       <div className="mesa-1v1">
         <Asiento j={j1} {...asientoProps} cantoPunto={burbujaDe(j1?.id)} />
         <div className="centro-mesa-vertical">
-          <CartaCentral cj={cj1} jugadores={jugadores} />
+          {renderCartasEnMesa()}
           <MuestraCentral muestra={estado.muestra} />
-          <CartaCentral cj={cj0} jugadores={jugadores} />
         </div>
         <Asiento j={j0} {...asientoProps} cantoPunto={burbujaDe(j0?.id)} />
       </div>
     );
   } else {
-    // Equipos alternados en damero: 2v2 [AB / BA], 3v3 [ABA / BAB]. Yo (o el
-    // primer jugador del equipo A si soy espectador) quedo abajo, mis compañeros
-    // en diagonal y los rivales intercalados. Cada carta jugada va enfrente.
     const { top, bottom } = distribuirAsientos(jugadores, userId, lobby.modo, esEspectador);
     const cartaDe = (id) => estado.cartasJugadas.find((cj) => cj.jugadorId === id);
     contenidoMesa = (
@@ -429,7 +465,6 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
         </div>
       )}
 
-      {/* Mensajes: siempre arriba de la mesa */}
       <div className="mensajes-arriba">
         {aviso && <div className="banner-flor">{aviso.texto}</div>}
         {!esEspectador && estado.tengoFlor && !estado.florInicial && !estado.florDeclarar && !estado.florOpcion && (
@@ -449,10 +484,8 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
         )}
       </div>
 
-      {/* Controles a la izquierda + mesa a la derecha */}
       <div className="mesa-y-controles">
         <div className="controles-izquierda">
-          {/* Respuestas a un canto: aparecen sólo cuando me toca responder. */}
           {!esEspectador && !enRevelacion && !estado.manoTerminada && cantoPendiente && puedoResponderCanto && (
             <>
               <button className="btn" onClick={() => responder(true)}>Quiero</button>
@@ -465,8 +498,6 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
               ))}
             </>
           )}
-          {/* Botones generales: sólo cuando no hay un canto esperando respuesta (si no, se
-              duplicaban con los botones de Quiero/No quiero/subir de arriba). */}
           {!esEspectador && !cantoPendiente && (
             <>
               <button className="btn btn-general" disabled={!puedoCantarTruco} onClick={cantarTruco}>

@@ -29,35 +29,32 @@ export class GameEngine {
     this.manos = {};
     this.cartasJugadas = [];
     this.bazas = [];
-    this.detalleManoActual = []; // [{equipo, puntos, motivo}] para el historial
+    this.detalleManoActual = [];
     jugadores.forEach((j, i) => { this.manos[j.id] = mazo.slice(i * 3, i * 3 + 3); });
     this.muestra = mazo[jugadores.length * 3] || mazo[0];
     this.turnoIndex = this.manoIndex;
     this.bazaPendiente = false;
     this.estadoCanto = null;
     this.trucoNivel = 0;
-    this.trucoPalabra = this.equipoDe(jugadores[this.manoIndex].id); // quién puede cantar/subir el truco
-    // En 2v2/3v3: control por jugador específico (no solo equipo)
-    this.trucoCantanteId = jugadores[this.manoIndex].id; // jugador que puede cantar/revirar ahora
-    this.trucoRespondeId = null; // jugador que debe responder (derecha del cantante)
-    this.trucoPuedeEscalarAhora = false; // true solo durante el escalarTruco inmediato
+    this.trucoPalabra = this.equipoDe(jugadores[this.manoIndex].id);
+    this.trucoCantanteId = jugadores[this.manoIndex].id;
+    this.trucoRespondeId = null;
+    this.trucoPuedeEscalarAhora = false;
     this.envidoResuelto = false;
     this.florResuelta = false;
-    this.revelacionEnvido = null; // sub-estado FASE_ENVIDO: canto de tantos en curso
-    this.florCanto = null; // sub-estado de flor cuando ambos equipos tienen flor
-    this.trucoPendienteGuardado = null; // truco pausado por interjección de envido ("el envido va primero")
-    this.accionReciente = null; // burbuja de acción sobre un jugador ({id, jugadorId, texto})
-    this.avisoTop = null; // mensaje temporal arriba ({id, texto})
+    this.revelacionEnvido = null;
+    this.florCanto = null;
+    this.trucoPendienteGuardado = null;
+    this.accionReciente = null;
+    this.avisoTop = null;
     this.manoTerminada = false;
     this.ganadorMano = null;
   }
 
-  // Burbuja de acción (Quiero, Truco, Me voy al mazo...) sobre la cabeza del jugador.
   registrarAccion(jugadorId, texto) {
     this.accionReciente = { id: ++this.accionSeq, jugadorId, texto };
   }
 
-  // Mensaje temporal arriba de la mesa (ej: "+3 de flor para X").
   avisar(texto) {
     this.avisoTop = { id: ++this.avisoSeq, texto };
   }
@@ -66,7 +63,6 @@ export class GameEngine {
     return this.lobby.jugadores.find((j) => j.id === jugadorId)?.nombre || "";
   }
 
-  // En 1v1 se usa el nombre del jugador; en 2v2/3v3 "Equipo A/B".
   nombreDeEquipo(equipo) {
     if (this.lobby.modo === "1v1") {
       return this.lobby.jugadores.find((j) => j.equipo === equipo)?.nombre || `Equipo ${equipo}`;
@@ -74,7 +70,6 @@ export class GameEngine {
     return `Equipo ${equipo}`;
   }
 
-  // Un jugador "ya jugó" si tiene una carta en la baza en curso o en una resuelta.
   haJugadoCarta(jugadorId) {
     return this.cartasJugadas.some((c) => c.jugadorId === jugadorId)
       || this.bazas.some((b) => (b.jugadas || []).some((j) => j.jugadorId === jugadorId));
@@ -93,15 +88,11 @@ export class GameEngine {
   cerrarMano(ganador) {
     this.manoTerminada = true;
     this.ganadorMano = ganador;
-    // Guardamos el detalle de AMBOS equipos (mano, truco, envido, flor...) para
-    // que en el historial se vean, por ejemplo, los puntos de envido aunque los
-    // haya ganado el equipo que perdió la mano.
     const detalle = this.detalleManoActual.slice();
     const puntos = detalle.filter((d) => d.equipo === ganador).reduce((s, d) => s + d.puntos, 0);
     this.historialManos.push({ numero: this.historialManos.length + 1, ganador, puntos, detalle });
   }
 
-  // --- Jugar carta ---
   jugarCarta(jugadorId, cartaId) {
     if (this.manoTerminada) throw new Error("La mano ya terminó");
     if (this.revelacionEnvido) throw new Error("Fase de envido en curso");
@@ -115,14 +106,10 @@ export class GameEngine {
     const [carta] = mano.splice(idx, 1);
     this.cartasJugadas.push({ jugadorId, carta });
     this.siguienteTurno();
-    // No resolvemos la baza al instante: la dejamos "pendiente" para que las cartas
-    // jugadas se vean un momento en el centro de la mesa antes de recogerse.
     if (this.cartasJugadas.length === this.jugadoresOrdenados().length) this.bazaPendiente = true;
     return carta;
   }
 
-  // Se llama desde el servidor, con un pequeño delay, una vez que ya se
-  // emitió el estado con las cartas jugadas visibles para todos.
   resolverBazaPendienteSiCorresponde() {
     if (!this.bazaPendiente) return false;
     this.bazaPendiente = false;
@@ -159,8 +146,7 @@ export class GameEngine {
     const empatados = this.cartasJugadas.filter((j) => compararCartas(j.carta, mejor.carta, this.muestra) === 0);
     const parda = empatados.length > 1;
     const equipoGanador = parda ? "parda" : this.equipoDe(mejor.jugadorId);
-    // Guardamos las cartas de la baza y quién ganó, para poder mostrar el historial
-    // de bazas jugadas (carta ganadora encima de la perdedora) en el cliente.
+    
     this.bazas.push({
       equipoGanador,
       ganadorId: parda ? null : mejor.jugadorId,
@@ -184,25 +170,18 @@ export class GameEngine {
     else if (this.bazas.length >= 2) {
       const b1 = this.bazas[0];
       const b2 = this.bazas[1];
-      // Parda en 1ra + alguien gana la 2da → gana el de la 2da de inmediato
       if (b1.equipoGanador === "parda" && b2.equipoGanador !== "parda") {
         ganador = b2.equipoGanador;
-      }
-      // Alguien gana la 1ra + parda en 2da → gana el de la 1ra de inmediato
-      else if (b1.equipoGanador !== "parda" && b2.equipoGanador === "parda") {
+      } else if (b1.equipoGanador !== "parda" && b2.equipoGanador === "parda") {
         ganador = b1.equipoGanador;
       }
-      // Empate real (1-1) después de 2 bazas: se juega la 3ra
     }
 
-    // 3ra baza
     if (!ganador && this.bazas.length === 3) {
       const b3 = this.bazas[2];
       if (b3.equipoGanador !== "parda") {
-        // Gana quien ganó más bazas; si empate 1-1 gana quien ganó la 1ra
         ganador = a > b ? "A" : b > a ? "B" : this.bazas[0].equipoGanador;
       } else {
-        // 3ra también parda: empate total → gana el equipo de la mano
         if (a === b) {
           ganador = this.equipoDe(this.jugadoresOrdenados()[this.manoIndex].id);
         } else {
@@ -219,42 +198,51 @@ export class GameEngine {
     }
   }
 
-  // --- Truco: respeta la "palabra" (quién puede cantar/subir) ---
+  // --- TRUCO: Solo el jugador con el turno puede cantar ---
   cantarTruco(jugadorId) {
     if (this.revelacionEnvido) throw new Error("Fase de envido en curso");
     if (this.florCanto) throw new Error("Hay una flor pendiente");
     if (this.estadoCanto && !this.estadoCanto.respondido) throw new Error("Hay un canto pendiente");
     if (this.bazaPendiente) throw new Error("Esperando que se resuelva la baza");
     if (this.trucoNivel >= 3) throw new Error("Ya está en vale4");
-    const equipo = this.equipoDe(jugadorId);
-    if (equipo !== this.trucoPalabra) throw new Error("No tenés la palabra para cantar truco");
-
-    // En 2v2/3v3: solo puede cantar/revirar quien tiene el turno actual
-    // O quien acaba de responder "quiero" y escala de inmediato (escalarTruco).
-    if (this.lobby.modo !== "1v1") {
-      const esTurnoActual = this.jugadorActual().id === jugadorId;
-      const puedeEscalarAhora = this.trucoCantanteId === jugadorId && this.trucoPuedeEscalarAhora;
-      if (!esTurnoActual && !puedeEscalarAhora) {
-        throw new Error("Esperá tu turno para cantar o revirar el truco");
-      }
-      // Consumir el permiso de escalada inmediata (uso único)
-      this.trucoPuedeEscalarAhora = false;
-      if (esTurnoActual) this.trucoCantanteId = jugadorId;
+    
+    const jugador = this.jugadoresOrdenados().find(j => j.id === jugadorId);
+    if (!jugador) throw new Error("Jugador no encontrado");
+    
+    // REGLA: Solo el jugador que tiene el turno puede cantar truco
+    const actual = this.jugadorActual();
+    if (!actual || actual.id !== jugadorId) {
+      throw new Error("No es tu turno para cantar truco");
     }
-
-    this.trucoNivel += 1;
+    
+    const equipo = this.equipoDe(jugadorId);
     const equipoRival = this.rivalDe(equipo);
-
-    // Calcular quién debe responder: el jugador inmediatamente a la derecha del cantante
+    
+    // Si ya hay truco cantado (retruco/vale4), el equipo debe tener la palabra
+    if (this.trucoNivel > 0) {
+      if (equipo !== this.trucoPalabra) {
+        throw new Error("No tenés la palabra para revirar el truco");
+      }
+    }
+    
+    this.trucoNivel += 1;
+    
     const jugadores = this.jugadoresOrdenados();
     const callerIdx = jugadores.findIndex((j) => j.id === jugadorId);
     const responderIdx = (callerIdx + 1) % jugadores.length;
     this.trucoRespondeId = jugadores[responderIdx].id;
-    // Próximo cantante (si el respondedor escala): el de la derecha del respondedor
     const nextCantanteIdx = (responderIdx + 1) % jugadores.length;
     this.trucoCantanteId = jugadores[nextCantanteIdx].id;
-
-    this.estadoCanto = { tipo: "truco", nivel: NIVELES_TRUCO[this.trucoNivel - 1], equipoQueCanto: equipo, equipoQueResponde: equipoRival, respondido: false };
+    
+    this.trucoPalabra = equipoRival;
+    
+    this.estadoCanto = { 
+      tipo: "truco", 
+      nivel: NIVELES_TRUCO[this.trucoNivel - 1], 
+      equipoQueCanto: equipo, 
+      equipoQueResponde: equipoRival, 
+      respondido: false 
+    };
     this.registrarAccion(jugadorId, TEXTO_TRUCO[NIVELES_TRUCO[this.trucoNivel - 1]]);
     return this.estadoCanto;
   }
@@ -262,7 +250,6 @@ export class GameEngine {
   responderTruco(jugadorId, quiero) {
     if (!this.estadoCanto || this.estadoCanto.tipo !== "truco") throw new Error("No hay truco pendiente");
     if (this.equipoDe(jugadorId) === this.estadoCanto.equipoQueCanto) throw new Error("No podés responder tu propio canto");
-    // En 2v2/3v3: solo puede responder el jugador de la derecha del cantante
     if (this.lobby.modo !== "1v1" && this.trucoRespondeId && jugadorId !== this.trucoRespondeId) {
       throw new Error("No te corresponde responder este truco");
     }
@@ -280,33 +267,27 @@ export class GameEngine {
       return { quiero };
     }
     this.trucoPalabra = equipoQueResponde;
-    // En 2v2/3v3: habilitar escalada inmediata (escalarTruco = quiero+cantar en el mismo clic)
     if (this.lobby.modo !== "1v1") {
       this.trucoCantanteId = jugadorId;
-      this.trucoPuedeEscalarAhora = true; // permiso de uso único para revirar ahora mismo
+      this.trucoPuedeEscalarAhora = true;
     }
     this.trucoRespondeId = null;
     this.estadoCanto = null;
     return { quiero };
   }
 
-  // --- Envido: solo antes de que se juegue la primera carta de la mano ---
   algunTieneFlorSinResolver() {
     if (this.florResuelta || this.bazas.length > 0) return false;
     return this.jugadoresOrdenados().some((j) => this.tieneFlor(j.id));
   }
 
   envidoDisponible(jugadorId) {
-    // Se puede cantar durante la primera ronda (antes de que se jueguen 2 cartas)
-    // sin importar de quién sea el turno ni quién sea mano.
     if (this.envidoResuelto || this.bazas.length !== 0 || this.bazaPendiente || this.revelacionEnvido) return false;
     if (this.algunTieneFlorSinResolver()) return false;
     if (jugadorId && this.haJugadoCarta(jugadorId)) return false;
     return true;
   }
 
-  // Qué cantos de envido se pueden encadenar a partir de la cadena actual.
-  // Escalada: Envido → Envido (una sola vez más) → Real Envido → Falta Envido.
   siguientesEnvidoValidos(cadena) {
     if (!cadena || cadena.length === 0) return ["envido", "real-envido", "falta-envido"];
     const ultimo = cadena[cadena.length - 1];
@@ -320,9 +301,6 @@ export class GameEngine {
     return opciones;
   }
 
-  // Sirve tanto para el primer canto como para las subidas (revirar). Si ya hay un
-  // envido pendiente, este canto se trata como una escalada: NO se resuelve, queda
-  // pendiente para que responda el otro equipo (ahí aparece Quiero/No quiero/subir).
   cantarEnvido(jugadorId, tipo) {
     if (this.florCanto) throw new Error("Hay una flor pendiente");
     const equipo = this.equipoDe(jugadorId);
@@ -330,7 +308,7 @@ export class GameEngine {
     if (ec && ec.tipo === "envido" && !ec.respondido) {
       if (equipo !== ec.equipoQueResponde) throw new Error("No es tu turno de responder el envido");
       if (!this.siguientesEnvidoValidos(ec.cadena).includes(tipo)) throw new Error("No podés cantar ese envido ahora");
-      ec.acumuladoNoQuerido = ec.acumuladoQuerido || 1; // rechazar ahora paga lo ya acumulado
+      ec.acumuladoNoQuerido = ec.acumuladoQuerido || 1;
       if (tipo === "falta-envido") ec.esFalta = true;
       else ec.acumuladoQuerido += VALOR_ENVIDO_CANTO[tipo];
       ec.cadena.push(tipo);
@@ -343,8 +321,6 @@ export class GameEngine {
     }
     if (this.haJugadoCarta(jugadorId)) throw new Error("No podés cantar envido: ya jugaste una carta en la ronda");
     if (!this.envidoDisponible(jugadorId)) throw new Error("Ya no se puede cantar envido en esta mano");
-    // "El envido va primero": si había un truco cantado sin responder, se pausa
-    // (queda guardado) hasta que el envido se resuelva del todo.
     if (ec && ec.tipo === "truco" && !ec.respondido) {
       this.trucoPendienteGuardado = ec;
       this.avisar("El envido va primero");
@@ -367,10 +343,6 @@ export class GameEngine {
     return this.estadoCanto;
   }
 
-  // Gana el envido el puntaje más alto; en caso de empate de puntaje máximo entre
-  // equipos, gana el equipo del jugador "mano" (el más cercano en orden de mano).
-  // El recorrido empieza desde manoIndex, por lo que el primer jugador en alcanzar
-  // el máximo (=el más cercano a la mano) queda asignado en ganador.
   resolverGanadorEnvido() {
     const jugadores = this.jugadoresOrdenados();
     const n = jugadores.length;
@@ -379,27 +351,19 @@ export class GameEngine {
       const j = jugadores[(this.manoIndex + k) % n];
       const val = this.calcularEnvidoJugador(j.id);
       if (j.equipo === "A") mejorA = Math.max(mejorA, val); else mejorB = Math.max(mejorB, val);
-      // Solo actualiza con estricto mayor: así en empate queda el más cercano a la mano
       if (val > mejorVal) { mejorVal = val; ganador = j.equipo; }
     }
-    // Guardia extra: si ambos equipos tienen el mismo puntaje máximo y por alguna
-    // razón ganador quedó mal, corregir explícitamente a favor de la mano.
     if (mejorA === mejorB && mejorA === mejorVal) {
       ganador = this.equipoDe(jugadores[this.manoIndex].id);
     }
     return { ganador, mejorA, mejorB };
   }
 
-  // Aporte de una carta como "acompañante" del conteo: si es pieza, su cartón
-  // (número efectivo); si es común, su valor de envido (10,11,12 = 0).
   aporteCarta(carta) {
     const nEf = numeroPiezaEfectivo(carta, this.muestra);
     return nEf != null ? nEf : carta.valorEnvido;
   }
 
-  // Conteo de tantos. Con piezas se rompe el +20: se toma el valor fijo de la pieza
-  // mayor y se le suman los aportes de las otras cartas (una para el envido, las dos
-  // restantes para la flor). Sin piezas, envido tradicional / flor = 20 + suma.
   calcularTantos(cartas, usarTodas) {
     const piezas = cartas.filter((c) => esPieza(c, this.muestra));
     if (piezas.length === 0) {
@@ -446,16 +410,10 @@ export class GameEngine {
     else puntos = ec.acumuladoQuerido;
     this.registrarPuntos(ganador, puntos, ec.nivel.replace(/-/g, " "));
     this.estadoCanto = null;
-    // FASE_ENVIDO: se entra en la revelación (canto de tantos secuencial) que
-    // bloquea el juego hasta que el servidor la cierra.
     this.revelacionEnvido = { id: ++this.revelacionSeq, orden: this.secuenciaCantoEnvido(), ganador, puntos };
     return { quiero, ganador, mejorA, mejorB };
   }
 
-  // Orden en que los jugadores "cantan" sus tantos, empezando por el mano y
-  // girando alrededor de la mesa. Cada jugador dice su número si supera al mayor
-  // dicho hasta el momento; si no puede superarlo dice "Son buenas" (sin revelar
-  // su número); y si un compañero suyo ya va ganando, ni habla.
   secuenciaCantoEnvido() {
     const jugadores = this.jugadoresOrdenados();
     const n = jugadores.length;
@@ -465,7 +423,7 @@ export class GameEngine {
     for (let k = 0; k < n; k++) {
       const j = jugadores[(this.manoIndex + k) % n];
       const val = this.calcularEnvidoJugador(j.id);
-      if (equipoLider && j.equipo === equipoLider) continue; // compañero del líder: calla
+      if (equipoLider && j.equipo === equipoLider) continue;
       if (val > maxDicho) {
         orden.push({ jugadorId: j.id, equipo: j.equipo, texto: String(val), puntos: val });
         maxDicho = val;
@@ -485,21 +443,16 @@ export class GameEngine {
     }
   }
 
-  // --- Flor ---
-  // Hay flor si las 3 cartas forman "mismo palo" usando las piezas (palo de la
-  // muestra) como comodín. Cubre: 3 del mismo palo · 1 pieza + 2 del mismo palo ·
-  // 2 piezas + 1 cualquiera · 3 piezas.
   tieneFlor(jugadorId) {
     const cartas = this.manos[jugadorId];
     if (!cartas || cartas.length < 3) return false;
     const piezas = cartas.filter((c) => esPieza(c, this.muestra));
     const resto = cartas.filter((c) => !esPieza(c, this.muestra));
-    if (piezas.length >= 2) return true;                 // 2 piezas + 1 cualquiera
-    if (piezas.length === 1) return resto[0].palo === resto[1].palo; // 1 pieza + 2 del mismo palo
-    return cartas.every((c) => c.palo === cartas[0].palo); // sin piezas: 3 del mismo palo
+    if (piezas.length >= 2) return true;
+    if (piezas.length === 1) return resto[0].palo === resto[1].palo;
+    return cartas.every((c) => c.palo === cartas[0].palo);
   }
 
-  // Equipos (distintos) que tienen al menos un jugador con flor.
   equiposConFlor() {
     const equipos = new Set();
     for (const j of this.jugadoresOrdenados()) {
@@ -512,7 +465,6 @@ export class GameEngine {
     return this.calcularTantos(this.manos[jugadorId], true);
   }
 
-  // Gana la flor la más alta; empate → equipo del jugador mano (orden de mano).
   resolverGanadorFlor() {
     const jugadores = this.jugadoresOrdenados();
     const n = jugadores.length;
@@ -527,7 +479,6 @@ export class GameEngine {
     return { ganador, mejorA, mejorB };
   }
 
-  // Resuelve la contienda de flor (ambos equipos con flor): gana la flor más alta.
   resolverFlorContienda(nivel = "flor") {
     const { ganador } = this.resolverGanadorFlor();
     let puntos;
@@ -541,11 +492,6 @@ export class GameEngine {
     return { resuelto: true, ganador, puntos };
   }
 
-  // Flujo de flor:
-  //  - Canto inicial: si el rival NO tiene flor → +3 automáticos y aviso arriba.
-  //    Si el rival tiene flor → queda esperando que el rival también diga "Flor".
-  //  - El rival dice "Flor" (contra-declaración) → el primer equipo puede escalar a
-  //    "Contra flor al resto" o resolver ("Con flor quiero").
   cantarFlor(jugadorId, tipo = "flor") {
     if (this.florResuelta) throw new Error("La flor ya se jugó esta mano");
     if (this.bazas.length > 0) throw new Error("La flor solo se canta antes de la primera baza");
@@ -553,7 +499,6 @@ export class GameEngine {
     const equipo = this.equipoDe(jugadorId);
     const equipoRival = this.rivalDe(equipo);
 
-    // Opción del primer equipo tras la contra-declaración del rival.
     if (this.florCanto && this.florCanto.fase === "opcion") {
       if (equipo !== this.florCanto.primerEquipo) throw new Error("No es tu opción de flor");
       if (tipo === "contraflor-al-resto") {
@@ -562,12 +507,10 @@ export class GameEngine {
         this.estadoCanto = { tipo: "flor", nivel: "contraflor-al-resto", equipoQueCanto: equipo, equipoQueResponde: equipoRival, respondido: false };
         return this.estadoCanto;
       }
-      // "Con flor quiero": se resuelve la contienda de flor por la más alta.
       this.registrarAccion(jugadorId, "Con flor quiero");
       return this.resolverFlorContienda("flor");
     }
 
-    // Contra-declaración del rival: también dice "Flor".
     if (this.florCanto && this.florCanto.fase === "esperando-rival") {
       if (equipo !== this.rivalDe(this.florCanto.primerEquipo)) throw new Error("No es tu turno de flor");
       if (!this.tieneFlor(jugadorId)) throw new Error("No tenés flor");
@@ -577,13 +520,10 @@ export class GameEngine {
       return this.florCanto;
     }
 
-    // Canto inicial de flor.
     if (!this.tieneFlor(jugadorId)) throw new Error("No tenés flor");
-    this.envidoResuelto = true; // la flor "mata" al envido
+    this.envidoResuelto = true;
     this.registrarAccion(jugadorId, TEXTO_FLOR.flor);
 
-    // Si el otro equipo NO tiene flor: 3 puntos automáticos (aunque dos compañeros
-    // tengan flor, siguen siendo 3) y mensaje arriba durante unos segundos.
     const rivalTieneFlor = this.equiposConFlor().includes(equipoRival);
     if (!rivalTieneFlor) {
       this.registrarPuntos(equipo, PUNTOS_FLOR.flor, "flor");
@@ -593,7 +533,6 @@ export class GameEngine {
       return { resuelto: true, ganador: equipo, puntos: PUNTOS_FLOR.flor };
     }
 
-    // Ambos equipos tienen flor: se espera que el rival también diga "Flor".
     this.florCanto = { primerEquipo: equipo, equipos: [equipo], fase: "esperando-rival" };
     return this.florCanto;
   }
@@ -606,7 +545,6 @@ export class GameEngine {
     this.registrarAccion(jugadorId, quiero ? "Quiero" : "No quiero");
     this.estadoCanto = null;
     if (!quiero) {
-      // No quiere la contra flor al resto: el que la cantó se lleva la flor en juego.
       this.registrarPuntos(ec.equipoQueCanto, PUNTOS_FLOR.flor, `${ec.nivel.replace(/-/g, " ")} no querida`);
       this.florResuelta = true;
       this.florCanto = null;
@@ -659,14 +597,10 @@ export class GameEngine {
       historialManos: this.historialManos,
       envidoDisponible: !esEspectador && this.envidoDisponible(paraJugadorId),
       tengoFlor: !esEspectador && this.bazas.length === 0 && !this.bazaPendiente && !this.florResuelta && this.tieneFlor(paraJugadorId),
-      // Botón "Flor" inicial: en cualquier momento antes de la primera baza (no hace
-      // falta que sea tu turno de jugar carta para poder cantarla).
       florInicial: !esEspectador && !this.florCanto && !this.florResuelta && this.bazas.length === 0 && !this.bazaPendiente
         && this.tieneFlor(paraJugadorId),
-      // Botón "Flor" del rival (contra-declaración) cuando el primer equipo ya cantó.
       florDeclarar: !esEspectador && !!this.florCanto && this.florCanto.fase === "esperando-rival"
         && this.equipoDe(paraJugadorId) === this.rivalDe(this.florCanto.primerEquipo) && this.tieneFlor(paraJugadorId),
-      // Opción "Contra flor al resto" sólo para el primer equipo, y sólo tras la contra-declaración.
       florOpcion: !esEspectador && !!this.florCanto && this.florCanto.fase === "opcion"
         && this.equipoDe(paraJugadorId) === this.florCanto.primerEquipo,
       manos: Object.fromEntries(

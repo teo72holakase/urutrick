@@ -16,7 +16,6 @@ const DB_ID = process.env.APPWRITE_DATABASE_ID;
 const COL_HISTORIAL = process.env.APPWRITE_HISTORIAL_COLLECTION_ID || "historial";
 const COL_RANKING   = process.env.APPWRITE_RANKING_COLLECTION_ID   || "ranking";
 
-// ── Historial de partidas ────────────────────────────────────────────────────
 export async function guardarHistorial(lobby, equipoGanador) {
   if (!habilitado) return;
   await databases.createDocument(DB_ID, COL_HISTORIAL, ID.unique(), {
@@ -29,11 +28,6 @@ export async function guardarHistorial(lobby, equipoGanador) {
     fecha: new Date().toISOString(),
   });
 }
-
-// ── Ranking persistido ───────────────────────────────────────────────────────
-// Campos esperados en la colección "ranking":
-//   userId (string), nombre (string),
-//   manos (integer), mesas (integer), puntos (integer)
 
 export async function cargarRanking() {
   if (!habilitado) return [];

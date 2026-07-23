@@ -1,10 +1,7 @@
-// Leaderboard respaldado en Appwrite. La Map actúa como caché en memoria para
-// lecturas rápidas; cada escritura también persiste en la base de datos.
 import { cargarRanking, guardarEstadistica } from "./appwrite.js";
 
-const stats = new Map(); // userId -> { userId, nombre, manos, mesas, puntos }
+const stats = new Map();
 
-// Llamar en el arranque del servidor para hidratar la caché desde Appwrite.
 export async function inicializarStats() {
   try {
     const datos = await cargarRanking();
