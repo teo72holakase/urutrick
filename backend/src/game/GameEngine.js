@@ -1,4 +1,4 @@
-import { crearMazo, barajar, compararCartas, esPieza, numeroPiezaEfectivo, valorPiezaTantos } from "./Deck.js";
+import { crearMazo, barajar, compararCartas, esPieza, numeroPiezaEfectivo, valorPiezaTantos, fuerzaCarta } from "./Deck.js";
 
 const PUNTOS_TRUCO = { truco: 2, retruco: 3, vale4: 4 };
 const NIVELES_TRUCO = ["truco", "retruco", "vale4"];
@@ -139,19 +139,34 @@ export class GameEngine {
     this.cerrarMano(rival);
   }
 
-  resolverBaza() {
-    let mejor = this.cartasJugadas[0];
-    for (const jugada of this.cartasJugadas.slice(1)) {
-      if (compararCartas(jugada.carta, mejor.carta, this.muestra) > 0) mejor = jugada;
+    resolverBaza() {
+    const jugadas = this.cartasJugadas;
+    if (jugadas.length === 0) return;
+    
+    // Calcular fuerza de cada carta
+    const conFuerza = jugadas.map(j => ({
+      ...j,
+      fuerza: fuerzaCarta(j.carta, this.muestra)
+    }));
+    
+    // Encontrar la fuerza máxima
+    let maxFuerza = -Infinity;
+    for (const j of conFuerza) {
+      if (j.fuerza > maxFuerza) maxFuerza = j.fuerza;
     }
-    const empatados = this.cartasJugadas.filter((j) => compararCartas(j.carta, mejor.carta, this.muestra) === 0);
-    const parda = empatados.length > 1;
+    
+    // Contar cuántas cartas tienen la fuerza máxima
+    const ganadoras = conFuerza.filter(j => j.fuerza === maxFuerza);
+    const parda = ganadoras.length > 1;
+    
+    // El mejor es la primera carta con fuerza máxima (o cualquiera en parda)
+    const mejor = ganadoras[0];
     const equipoGanador = parda ? "parda" : this.equipoDe(mejor.jugadorId);
     
     this.bazas.push({
       equipoGanador,
       ganadorId: parda ? null : mejor.jugadorId,
-      jugadas: this.cartasJugadas.map((j) => ({ jugadorId: j.jugadorId, carta: j.carta })),
+      jugadas: jugadas.map((j) => ({ jugadorId: j.jugadorId, carta: j.carta })),
     });
     this.cartasJugadas = [];
 
