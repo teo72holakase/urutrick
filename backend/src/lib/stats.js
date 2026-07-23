@@ -1,6 +1,6 @@
 // Leaderboard respaldado en Appwrite. La Map actúa como caché en memoria para
 // lecturas rápidas; cada escritura también persiste en la base de datos.
-import { cargarRanking, guardarEstadistica, buscarJugadorPorNombre } from "./appwrite.js";
+import { cargarRanking, guardarEstadistica } from "./appwrite.js";
 
 const stats = new Map(); // userId -> { userId, nombre, manos, mesas, puntos }
 
@@ -51,9 +51,4 @@ export function leaderboard() {
        .slice(0, 5)
        .map((e) => ({ nombre: e.nombre, valor: e[campo] }));
   return { manos: top("manos"), mesas: top("mesas"), puntos: top("puntos") };
-}
-
-// Búsqueda exacta de jugador (va directo a Appwrite para no depender de la caché).
-export async function buscarJugador(nombre) {
-  return buscarJugadorPorNombre(nombre);
 }
