@@ -13,17 +13,17 @@
 }
 
 :root[data-tema="claro"] {
-  --madera-1: #c8923e;
-  --madera-2: #b07828;
-  --madera-3: #805a18;
-  --paño: #1a6040;
-  --paño-borde: #0e4028;
-  --texto: #180c00;
-  --texto-suave: #5a3810;
-  --acento: #d48c08;     /* ámbar brillante — contraste alto con texto oscuro */
-  --acento-2: #a06000;   /* ámbar profundo */
-  --panel: rgba(255, 240, 200, 0.96);
-  --sombra: rgba(100, 50, 0, 0.28);
+  --madera-1: #e8d5b8;
+  --madera-2: #d4c0a8;
+  --madera-3: #b8a088;
+  --paño: #2d7a5a;
+  --paño-borde: #1a5a3e;
+  --texto: #2a1a0a;
+  --texto-suave: #6a4a2a;
+  --acento: #c4820a;
+  --acento-2: #8a5c08;
+  --panel: rgba(255, 248, 235, 0.95);
+  --sombra: rgba(80, 50, 20, 0.25);
 }
 
 :root {
@@ -52,6 +52,14 @@ body {
     linear-gradient(148deg, var(--madera-2) 0%, var(--madera-1) 40%, var(--madera-3) 100%);
   background-attachment: fixed;
   min-height: 100vh;
+}
+
+/* Tema claro: gradiente más suave y cálido */
+:root[data-tema="claro"] body {
+  background-image:
+    radial-gradient(ellipse at 20% 10%, rgba(255, 235, 200, 0.3), transparent 50%),
+    radial-gradient(ellipse at 80% 90%, rgba(200, 160, 120, 0.2), transparent 45%),
+    linear-gradient(155deg, #f0e4d0 0%, #e0d0b8 30%, #d4c0a8 60%, #c8b498 100%);
 }
 
 h1, h2, h3, .titulo {
@@ -100,6 +108,13 @@ h1, h2, h3, .titulo {
     inset 0 1px 0 rgba(255,255,255,0.12),
     inset 0 0 40px rgba(0,0,0,0.15);
   padding: 1.5rem;
+}
+
+/* Tema claro: panel más cálido y con sombra suave */
+:root[data-tema="claro"] .panel {
+  background: rgba(255, 248, 235, 0.92);
+  border-color: #b8a088;
+  box-shadow: 0 4px 20px rgba(80, 50, 20, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 .btn {
@@ -159,12 +174,26 @@ input, select {
   padding: 0.5rem;
 }
 
+/* Tema claro: inputs más suaves */
+:root[data-tema="claro"] input,
+:root[data-tema="claro"] select {
+  background: rgba(255, 248, 235, 0.8);
+  border-color: #b8a088;
+  color: #2a1a0a;
+}
+
 .mesa {
   background: radial-gradient(ellipse at center, var(--paño) 0%, var(--paño-borde) 100%);
   border: 10px solid var(--madera-3);
   border-radius: 50% / 30%;
   min-height: 48vh;
   position: relative;
+}
+
+/* Tema claro: mesa con fieltro más suave */
+:root[data-tema="claro"] .mesa {
+  border-color: #b8a088;
+  box-shadow: inset 0 2px 12px rgba(0,0,0,0.2), 0 4px 20px rgba(80,50,20,0.2);
 }
 
 .carta {
@@ -318,6 +347,18 @@ input, select {
   padding: 0.8rem;
 }
 
+/* Tema claro: fieltro más suave y sombra más ligera */
+:root[data-tema="claro"] .mesa {
+  background-image:
+    radial-gradient(ellipse at 50% 0%,   rgba(255,255,255,0.1), transparent 60%),
+    radial-gradient(ellipse at 50% 100%, rgba(0,0,0,0.1),       transparent 55%),
+    repeating-linear-gradient(135deg,
+      rgba(0,0,0,0.03) 0px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) 5px,
+      rgba(0,0,0,0.02) 6px, rgba(0,0,0,0) 7px, rgba(0,0,0,0) 12px);
+  border-color: #1a5a3e;
+  box-shadow: inset 0 2px 12px rgba(0,0,0,0.15), 0 4px 20px rgba(80,50,20,0.15);
+}
+
 .mesa-1v1 {
   display: flex; flex-direction: column; justify-content: space-evenly;
   min-height: 46vh; padding: 1rem 0; gap: 0.6rem;
@@ -336,21 +377,11 @@ input, select {
 .mesa-wrap { display: flex; align-items: stretch; gap: 0.6rem; }
 .mesa-wrap .mesa { flex: 1; min-width: 0; }
 
-/* Búsqueda de jugador en el leaderboard */
-.buscar-jugador-col { min-width: 180px; }
-.buscar-fila { display: flex; gap: 0.35rem; margin-top: 0.4rem; }
-.buscar-input {
-  flex: 1; min-width: 0;
-  font-family: "Cabin", sans-serif; font-size: 0.82rem;
-  background: var(--madera-1); color: var(--texto);
-  border: 2px solid var(--madera-3); border-radius: 6px;
-  padding: 0.3rem 0.5rem; outline: none;
-}
-.buscar-input:focus { border-color: var(--acento); }
-.buscar-btn { padding: 0.3rem 0.6rem !important; font-size: 0.8rem !important; }
-.buscar-vacio { color: var(--texto-suave); font-size: 0.82rem; margin-top: 0.4rem; }
-.buscar-resultado { margin-top: 0.5rem; border-top: 1px solid var(--madera-3); padding-top: 0.4rem; }
-.buscar-nombre-fila { font-weight: 800; color: var(--acento); margin-bottom: 0.2rem; }
+/* Búsqueda de jugador en el leaderboard - ELIMINADO */
+.buscar-jugador-col { display: none; }
+
+/* Mantener espacio consistente con las otras columnas */
+.ranking-cols .buscar-jugador-col { flex: 0 0 0; padding: 0; border: none; }
 
 .historial-bazas {
   flex: 0 0 104px; display: flex; flex-direction: column; align-items: center;

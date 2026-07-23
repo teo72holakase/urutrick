@@ -66,16 +66,3 @@ export async function guardarEstadistica({ userId, nombre, manos, mesas, puntos 
     console.error("Error guardando estadística:", e.message);
   }
 }
-
-export async function buscarJugadorPorNombre(nombre) {
-  if (!habilitado) return null;
-  try {
-    const res = await databases.listDocuments(DB_ID, COL_RANKING, [Query.equal("nombre", nombre)]);
-    if (!res.documents.length) return null;
-    const d = res.documents[0];
-    return { nombre: d.nombre, manos: d.manos || 0, mesas: d.mesas || 0, puntos: d.puntos || 0 };
-  } catch (e) {
-    console.error("Error buscando jugador:", e.message);
-    return null;
-  }
-}
