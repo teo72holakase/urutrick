@@ -92,9 +92,7 @@ function CartaFrente({ cj }) {
 }
 
 function PilaBaza({ baza, jugadores, esUno }) {
-  const jugadas = [...(baza.jugadas || [])].sort(
-    (a, b) => (a.jugadorId === baza.ganadorId ? 1 : 0) - (b.jugadorId === baza.ganadorId ? 1 : 0)
-  );
+  const jugadas = baza.jugadas || [];
   const n = jugadas.length;
   const CARTA_W = 40, CARTA_H = 61.8;
   const offX = n > 1 ? Math.min(14, Math.floor(48 / (n - 1))) : 0;
@@ -106,10 +104,25 @@ function PilaBaza({ baza, jugadores, esUno }) {
   if (esParda) etiqueta = "Parda";
   else if (esUno) etiqueta = jugadores.find((j) => j.id === baza.ganadorId)?.nombre || "";
   else etiqueta = `Equipo ${baza.equipoGanador}`;
+  
+  // Encontrar el índice de la carta ganadora para ponerla al final (arriba)
+  let ganadorIdx = -1;
+  if (!esParda && baza.ganadorId) {
+    ganadorIdx = jugadas.findIndex(j => j.jugadorId === baza.ganadorId);
+  }
+  
+  // Reordenar: la ganadora al final (arriba en la pila)
+  let cartasOrdenadas = [...jugadas];
+  if (ganadorIdx !== -1 && ganadorIdx !== cartasOrdenadas.length - 1) {
+    const [ganadora] = cartasOrdenadas.splice(ganadorIdx, 1);
+    cartasOrdenadas.push(ganadora);
+  }
+  
   return (
     <div className="baza-item">
       <div className="baza-pila" style={{ height: `${alto}px`, width: `${ancho}px` }}>
-        {jugadas.map((jg, i) => {
+        {cartasOrdenadas.map((jg, i) => {
+          // SOLO resaltar si es la carta ganadora
           const esGanadora = !esParda && jg.jugadorId === baza.ganadorId;
           const esPardaGanadora = esParda;
           return (

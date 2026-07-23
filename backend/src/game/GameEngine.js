@@ -125,7 +125,6 @@ export class GameEngine {
   }
 
   irseAlMazo(jugadorId) {
-    // VALIDACIÓN: Solo si es tu turno
     if (this.jugadorActual().id !== jugadorId) throw new Error("No es tu turno para irte al mazo");
     if (this.revelacionEnvido) throw new Error("Fase de envido en curso");
     if (this.florCanto) throw new Error("Hay una flor pendiente");
@@ -140,7 +139,7 @@ export class GameEngine {
     this.cerrarMano(rival);
   }
 
-    resolverBaza() {
+  resolverBaza() {
     let mejor = this.cartasJugadas[0];
     for (const jugada of this.cartasJugadas.slice(1)) {
       if (compararCartas(jugada.carta, mejor.carta, this.muestra) > 0) mejor = jugada;
@@ -164,7 +163,7 @@ export class GameEngine {
     }
   }
 
-      evaluarFinDeMano() {
+  evaluarFinDeMano() {
     const b1 = this.bazas[0];
     const b2 = this.bazas[1];
     const b3 = this.bazas[2];
@@ -174,39 +173,35 @@ export class GameEngine {
     if (b1?.equipoGanador !== "parda" && b2?.equipoGanador === b1.equipoGanador) {
       ganador = b1.equipoGanador;
     }
-    if (b1?.equipoGanador !== "parda" && b3?.equipoGanador === b1.equipoGanador) {
+    else if (b1?.equipoGanador !== "parda" && b3?.equipoGanador === b1.equipoGanador) {
       ganador = b1.equipoGanador;
     }
-    if (b2?.equipoGanador !== "parda" && b3?.equipoGanador === b2.equipoGanador) {
+    else if (b2?.equipoGanador !== "parda" && b3?.equipoGanador === b2.equipoGanador) {
       ganador = b2.equipoGanador;
     }
 
     // CASO 2: Parda + Alguien gana → gana el de la segunda
-    if (!ganador && b1?.equipoGanador === "parda" && b2?.equipoGanador !== "parda") {
+    else if (b1?.equipoGanador === "parda" && b2?.equipoGanador !== "parda") {
       ganador = b2.equipoGanador;
     }
 
     // CASO 3: Alguien gana + Parda → gana el de la primera
-    if (!ganador && b1?.equipoGanador !== "parda" && b2?.equipoGanador === "parda") {
+    else if (b1?.equipoGanador !== "parda" && b2?.equipoGanador === "parda") {
       ganador = b1.equipoGanador;
     }
 
     // CASO 4: Parda + Parda → gana el equipo de la mano
-    if (!ganador && b1?.equipoGanador === "parda" && b2?.equipoGanador === "parda") {
+    else if (b1?.equipoGanador === "parda" && b2?.equipoGanador === "parda") {
       ganador = this.equipoDe(this.jugadoresOrdenados()[this.manoIndex].id);
     }
 
-    // CASO 5: Gana A + Gana B + Parda → gana el de la primera
-    if (!ganador && this.bazas.length === 3) {
+    // CASO 5: Gana A + Gana B + Parda → gana el de la primera (ESTE ES EL CASO QUE FALLABA)
+    else if (this.bazas.length === 3) {
       if (b1.equipoGanador !== "parda" && b2.equipoGanador !== "parda" && b3.equipoGanador === "parda") {
         ganador = b1.equipoGanador;
       }
-    }
-
-    // CASO 6: Gana A + Gana B + Gana C (3 bazas distintas, nunca pasa en 1v1 pero por si acaso)
-    if (!ganador && this.bazas.length === 3) {
-      if (b1.equipoGanador !== "parda" && b2.equipoGanador !== "parda" && b3.equipoGanador !== "parda") {
-        // Quien tenga más bazas, o la primera si empate
+      // CASO 6: 3 bazas sin parda → gana quien tenga más, o la primera si empate
+      else if (b1.equipoGanador !== "parda" && b2.equipoGanador !== "parda" && b3.equipoGanador !== "parda") {
         const a = [b1, b2, b3].filter(b => b.equipoGanador === "A").length;
         const b = [b1, b2, b3].filter(b => b.equipoGanador === "B").length;
         ganador = a > b ? "A" : b > a ? "B" : b1.equipoGanador;
@@ -232,7 +227,6 @@ export class GameEngine {
     const jugador = this.jugadoresOrdenados().find(j => j.id === jugadorId);
     if (!jugador) throw new Error("Jugador no encontrado");
     
-    // REGLA: Solo el jugador que tiene el turno puede cantar truco
     const actual = this.jugadorActual();
     if (!actual || actual.id !== jugadorId) {
       throw new Error("No es tu turno para cantar truco");
@@ -241,7 +235,6 @@ export class GameEngine {
     const equipo = this.equipoDe(jugadorId);
     const equipoRival = this.rivalDe(equipo);
     
-    // Si ya hay truco cantado (retruco/vale4), el equipo debe tener la palabra
     if (this.trucoNivel > 0) {
       if (equipo !== this.trucoPalabra) {
         throw new Error("No tenés la palabra para revirar el truco");
@@ -305,7 +298,6 @@ export class GameEngine {
   }
 
   envidoDisponible(jugadorId) {
-    // VALIDACIÓN: Solo se puede cantar envido si es tu turno
     if (this.jugadorActual().id !== jugadorId) return false;
     if (this.envidoResuelto || this.bazas.length !== 0 || this.bazaPendiente || this.revelacionEnvido) return false;
     if (this.algunTieneFlorSinResolver()) return false;
