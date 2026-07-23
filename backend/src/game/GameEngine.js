@@ -164,51 +164,52 @@ export class GameEngine {
     }
   }
 
-    evaluarFinDeMano() {
-    const contarEquipo = (eq) => this.bazas.filter((b) => b.equipoGanador === eq).length;
-    const a = contarEquipo("A"), b = contarEquipo("B");
+      evaluarFinDeMano() {
+    const b1 = this.bazas[0];
+    const b2 = this.bazas[1];
+    const b3 = this.bazas[2];
     let ganador = null;
 
-    // Caso 1: Alguien ganó 2 bazas
-    if (a >= 2) ganador = "A";
-    else if (b >= 2) ganador = "B";
-    else if (this.bazas.length >= 2) {
-      const b1 = this.bazas[0];
-      const b2 = this.bazas[1];
-      
-      // Caso 2: Parda + Alguien gana → gana el de la segunda
-      if (b1.equipoGanador === "parda" && b2.equipoGanador !== "parda") {
-        ganador = b2.equipoGanador;
-      }
-      // Caso 3: Alguien gana + Parda → gana el de la primera (ESTE ES TU CASO)
-      else if (b1.equipoGanador !== "parda" && b2.equipoGanador === "parda") {
+    // CASO 1: Dos bazas ganadas por el mismo equipo → gana ese equipo
+    if (b1?.equipoGanador !== "parda" && b2?.equipoGanador === b1.equipoGanador) {
+      ganador = b1.equipoGanador;
+    }
+    if (b1?.equipoGanador !== "parda" && b3?.equipoGanador === b1.equipoGanador) {
+      ganador = b1.equipoGanador;
+    }
+    if (b2?.equipoGanador !== "parda" && b3?.equipoGanador === b2.equipoGanador) {
+      ganador = b2.equipoGanador;
+    }
+
+    // CASO 2: Parda + Alguien gana → gana el de la segunda
+    if (!ganador && b1?.equipoGanador === "parda" && b2?.equipoGanador !== "parda") {
+      ganador = b2.equipoGanador;
+    }
+
+    // CASO 3: Alguien gana + Parda → gana el de la primera
+    if (!ganador && b1?.equipoGanador !== "parda" && b2?.equipoGanador === "parda") {
+      ganador = b1.equipoGanador;
+    }
+
+    // CASO 4: Parda + Parda → gana el equipo de la mano
+    if (!ganador && b1?.equipoGanador === "parda" && b2?.equipoGanador === "parda") {
+      ganador = this.equipoDe(this.jugadoresOrdenados()[this.manoIndex].id);
+    }
+
+    // CASO 5: Gana A + Gana B + Parda → gana el de la primera
+    if (!ganador && this.bazas.length === 3) {
+      if (b1.equipoGanador !== "parda" && b2.equipoGanador !== "parda" && b3.equipoGanador === "parda") {
         ganador = b1.equipoGanador;
-      }
-      // Caso 4: Parda + Parda → gana el equipo de la mano
-      else if (b1.equipoGanador === "parda" && b2.equipoGanador === "parda") {
-        ganador = this.equipoDe(this.jugadoresOrdenados()[this.manoIndex].id);
       }
     }
 
-    // Caso 5: Gana A + Gana B + Parda → gana el de la primera (A)
+    // CASO 6: Gana A + Gana B + Gana C (3 bazas distintas, nunca pasa en 1v1 pero por si acaso)
     if (!ganador && this.bazas.length === 3) {
-      const b1 = this.bazas[0];
-      const b2 = this.bazas[1];
-      const b3 = this.bazas[2];
-      
-      // Si la tercera es parda y las dos primeras tienen ganadores distintos
-      if (b3.equipoGanador === "parda" && b1.equipoGanador !== "parda" && b2.equipoGanador !== "parda" && b1.equipoGanador !== b2.equipoGanador) {
-        ganador = b1.equipoGanador; // Gana el de la primera
-      }
-      // Si la tercera no es parda, gana quien tiene más bazas o el de la primera si empatan
-      else if (b3.equipoGanador !== "parda") {
+      if (b1.equipoGanador !== "parda" && b2.equipoGanador !== "parda" && b3.equipoGanador !== "parda") {
+        // Quien tenga más bazas, o la primera si empate
+        const a = [b1, b2, b3].filter(b => b.equipoGanador === "A").length;
+        const b = [b1, b2, b3].filter(b => b.equipoGanador === "B").length;
         ganador = a > b ? "A" : b > a ? "B" : b1.equipoGanador;
-      }
-      // Si la tercera es parda y hay un ganador claro
-      else if (b3.equipoGanador === "parda") {
-        if (a > b) ganador = "A";
-        else if (b > a) ganador = "B";
-        else ganador = b1.equipoGanador; // Empate 1-1, gana el de la primera
       }
     }
 
