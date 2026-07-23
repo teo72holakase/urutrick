@@ -140,7 +140,7 @@ export class GameEngine {
     this.cerrarMano(rival);
   }
 
-  resolverBaza() {
+    resolverBaza() {
     let mejor = this.cartasJugadas[0];
     for (const jugada of this.cartasJugadas.slice(1)) {
       if (compararCartas(jugada.carta, mejor.carta, this.muestra) > 0) mejor = jugada;
@@ -155,14 +155,16 @@ export class GameEngine {
       jugadas: this.cartasJugadas.map((j) => ({ jugadorId: j.jugadorId, carta: j.carta })),
     });
     this.cartasJugadas = [];
+
     if (this.bazas.length >= 2) this.evaluarFinDeMano();
+    
     if (!this.manoTerminada) {
       const ganadorIdx = this.jugadoresOrdenados().findIndex((j) => j.id === mejor.jugadorId);
       this.turnoIndex = equipoGanador === "parda" ? this.manoIndex : ganadorIdx;
     }
   }
 
-  evaluarFinDeMano() {
+    evaluarFinDeMano() {
     const contarEquipo = (eq) => this.bazas.filter((b) => b.equipoGanador === eq).length;
     const a = contarEquipo("A"), b = contarEquipo("B");
     let ganador = null;
@@ -178,7 +180,7 @@ export class GameEngine {
       if (b1.equipoGanador === "parda" && b2.equipoGanador !== "parda") {
         ganador = b2.equipoGanador;
       }
-      // Caso 3: Alguien gana + Parda → gana el de la primera
+      // Caso 3: Alguien gana + Parda → gana el de la primera (ESTE ES TU CASO)
       else if (b1.equipoGanador !== "parda" && b2.equipoGanador === "parda") {
         ganador = b1.equipoGanador;
       }

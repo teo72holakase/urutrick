@@ -325,25 +325,48 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
   let contenidoMesa;
 
   // --- CARTAS EN MESA CON RESALTADO DE PARDA ---
+    // --- CARTAS EN MESA CON RESALTADO DE PARDA ---
   const renderCartasEnMesa = () => {
     const cartasJugadas = estado.cartasJugadas || [];
     const bazas = estado.bazas || [];
+    const cantidadJugadores = jugadores.length;
     
     // Si hay cartas jugadas actualmente (baza en curso)
     if (cartasJugadas.length > 0) {
-      // Determinar si la baza ya está resuelta (última baza guardada y no hay cartas jugadas actuales en juego)
+      // SOLO mostrar resaltado SI la baza está completa (todos jugaron)
+      // En 1v1: 2 cartas, en 2v2: 4 cartas, en 3v3: 6 cartas
+      const bazaCompleta = cartasJugadas.length === cantidadJugadores;
+      
+      // Si la baza no está completa, NO mostrar resaltado
+      if (!bazaCompleta) {
+        return (
+          <div className="cartas-en-mesa">
+            {cartasJugadas.map((j, idx) => (
+              <div key={idx} className="carta-jugada-anim">
+                <PlayingCard carta={j.carta} />
+                <div className="etiqueta-jugada">
+                  {jugadores.find((p) => p.id === j.jugadorId)?.nombre || ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      }
+      
+      // Baza completa: obtener la última baza resuelta
       const ultimaBaza = bazas.length > 0 ? bazas[bazas.length - 1] : null;
-      const esParda = ultimaBaza && ultimaBaza.equipoGanador === "parda" && cartasJugadas.length === 0;
+      const esParda = ultimaBaza && ultimaBaza.equipoGanador === "parda";
       
       return (
         <div className="cartas-en-mesa">
           {cartasJugadas.map((j, idx) => {
             const esGanadora = ultimaBaza && ultimaBaza.ganadorId === j.jugadorId && !esParda;
+            const esPardaGanadora = esParda;
             return (
               <div key={idx} className="carta-jugada-anim">
                 <PlayingCard 
                   carta={j.carta} 
-                  className={esGanadora ? 'carta-ganadora-borde' : ''}
+                  className={esGanadora || esPardaGanadora ? 'carta-ganadora-borde' : ''}
                 />
                 <div className="etiqueta-jugada">
                   {jugadores.find((p) => p.id === j.jugadorId)?.nombre || ""}
