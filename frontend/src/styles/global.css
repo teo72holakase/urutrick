@@ -1,29 +1,29 @@
 :root[data-tema="oscuro"] {
-  --madera-1: #2b1c12;
-  --madera-2: #3e2a1a;
-  --madera-3: #543a22;
-  --paño: #0f3d2e;
-  --paño-borde: #0a2b20;
-  --texto: #f2e3c8;
-  --texto-suave: #cbb28d;
-  --acento: #d4a94e;
-  --acento-2: #a8722f;
-  --panel: rgba(20, 13, 8, 0.85);
-  --sombra: rgba(0, 0, 0, 0.6);
+  --madera-1: #231508;
+  --madera-2: #321e0e;
+  --madera-3: #4e3018;
+  --paño: #0d3828;
+  --paño-borde: #072518;
+  --texto: #f4e6c8;
+  --texto-suave: #c9a872;
+  --acento: #d4aa44;
+  --acento-2: #a07028;
+  --panel: rgba(18, 10, 4, 0.88);
+  --sombra: rgba(0, 0, 0, 0.7);
 }
 
 :root[data-tema="claro"] {
-  --madera-1: #c9a06a;
-  --madera-2: #b98450;
-  --madera-3: #a06c3a;
-  --paño: #1f6b4f;
-  --paño-borde: #154d38;
-  --texto: #2b1c12;
-  --texto-suave: #5a4530;
-  --acento: #8a5a1e;
-  --acento-2: #c99a4b;
-  --panel: rgba(255, 248, 232, 0.9);
-  --sombra: rgba(0, 0, 0, 0.25);
+  --madera-1: #c8923e;
+  --madera-2: #b07828;
+  --madera-3: #805a18;
+  --paño: #1a6040;
+  --paño-borde: #0e4028;
+  --texto: #180c00;
+  --texto-suave: #5a3810;
+  --acento: #d48c08;     /* ámbar brillante — contraste alto con texto oscuro */
+  --acento-2: #a06000;   /* ámbar profundo */
+  --panel: rgba(255, 240, 200, 0.96);
+  --sombra: rgba(100, 50, 0, 0.28);
 }
 
 :root {
@@ -40,10 +40,16 @@ body {
   color: var(--texto);
   background-color: var(--madera-1);
   background-image:
-    radial-gradient(ellipse at 15% 10%, rgba(255,255,255,0.06), transparent 55%),
-    radial-gradient(ellipse at 85% 90%, rgba(0,0,0,0.25), transparent 60%),
-    repeating-linear-gradient(95deg, rgba(0,0,0,0.06) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0) 100px, rgba(0,0,0,0.05) 102px),
-    linear-gradient(155deg, var(--madera-2) 0%, var(--madera-1) 45%, var(--madera-3) 100%);
+    radial-gradient(ellipse at 18% 8%,  rgba(255,255,255,0.08), transparent 45%),
+    radial-gradient(ellipse at 82% 92%, rgba(0,0,0,0.30), transparent 50%),
+    repeating-linear-gradient(92deg,
+      rgba(0,0,0,0.07) 0px, rgba(0,0,0,0) 1px,
+      rgba(0,0,0,0) 60px, rgba(0,0,0,0.05) 61px,
+      rgba(0,0,0,0) 120px),
+    repeating-linear-gradient(178deg,
+      rgba(255,255,255,0.03) 0px, rgba(255,255,255,0) 2px,
+      rgba(255,255,255,0) 80px, rgba(255,255,255,0.02) 82px),
+    linear-gradient(148deg, var(--madera-2) 0%, var(--madera-1) 40%, var(--madera-3) 100%);
   background-attachment: fixed;
   min-height: 100vh;
 }
@@ -86,9 +92,13 @@ h1, h2, h3, .titulo {
 
 .panel {
   background: var(--panel);
-  border: 3px solid var(--madera-3);
-  border-radius: 10px;
-  box-shadow: 0 6px 18px var(--sombra), inset 0 0 30px rgba(0,0,0,0.2);
+  border: 2px solid var(--madera-3);
+  border-radius: 12px;
+  box-shadow:
+    0 8px 28px var(--sombra),
+    0 2px 6px rgba(0,0,0,0.25),
+    inset 0 1px 0 rgba(255,255,255,0.12),
+    inset 0 0 40px rgba(0,0,0,0.15);
   padding: 1.5rem;
 }
 
@@ -290,6 +300,24 @@ input, select {
 /* Hueco invisible: ocupa el lugar de una carta ya jugada sin achicar la fila */
 .carta-hueco { width: var(--carta-w); height: var(--carta-h); }
 
+/* Superficie de paño (fieltro) — fondo de la mesa de juego */
+.mesa {
+  background-color: var(--paño);
+  background-image:
+    radial-gradient(ellipse at 50% 0%,   rgba(255,255,255,0.06), transparent 60%),
+    radial-gradient(ellipse at 50% 100%, rgba(0,0,0,0.20),       transparent 55%),
+    repeating-linear-gradient(135deg,
+      rgba(0,0,0,0.04) 0px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) 5px,
+      rgba(0,0,0,0.03) 6px, rgba(0,0,0,0) 7px, rgba(0,0,0,0) 12px);
+  border: 3px solid var(--paño-borde);
+  border-radius: 18px;
+  box-shadow:
+    inset 0 2px 12px rgba(0,0,0,0.35),
+    inset 0 0 40px rgba(0,0,0,0.18),
+    0 4px 14px var(--sombra);
+  padding: 0.8rem;
+}
+
 .mesa-1v1 {
   display: flex; flex-direction: column; justify-content: space-evenly;
   min-height: 46vh; padding: 1rem 0; gap: 0.6rem;
@@ -307,6 +335,22 @@ input, select {
 /* Mesa + historial de bazas a la derecha */
 .mesa-wrap { display: flex; align-items: stretch; gap: 0.6rem; }
 .mesa-wrap .mesa { flex: 1; min-width: 0; }
+
+/* Búsqueda de jugador en el leaderboard */
+.buscar-jugador-col { min-width: 180px; }
+.buscar-fila { display: flex; gap: 0.35rem; margin-top: 0.4rem; }
+.buscar-input {
+  flex: 1; min-width: 0;
+  font-family: "Cabin", sans-serif; font-size: 0.82rem;
+  background: var(--madera-1); color: var(--texto);
+  border: 2px solid var(--madera-3); border-radius: 6px;
+  padding: 0.3rem 0.5rem; outline: none;
+}
+.buscar-input:focus { border-color: var(--acento); }
+.buscar-btn { padding: 0.3rem 0.6rem !important; font-size: 0.8rem !important; }
+.buscar-vacio { color: var(--texto-suave); font-size: 0.82rem; margin-top: 0.4rem; }
+.buscar-resultado { margin-top: 0.5rem; border-top: 1px solid var(--madera-3); padding-top: 0.4rem; }
+.buscar-nombre-fila { font-weight: 800; color: var(--acento); margin-bottom: 0.2rem; }
 
 .historial-bazas {
   flex: 0 0 104px; display: flex; flex-direction: column; align-items: center;
@@ -377,13 +421,12 @@ input, select {
 .letra-equipo.letra-a { background: var(--acento); }
 .letra-equipo.letra-b { background: var(--acento-2); }
 .asiento-yo .nombre-jugador { color: var(--acento); }
-/* Resaltado de turno: reemplaza al 👉 anterior */
+/* Resaltado de turno: sutil, solo envuelve el nombre */
 .nombre-en-turno {
-  background: #f7c948;
-  color: #1a0e00 !important;
-  border-radius: 6px;
-  padding: 1px 7px;
-  box-shadow: 0 0 0 2px #d4920a;
+  background: rgba(220, 175, 50, 0.28);
+  border-radius: 4px;
+  padding: 0 5px;
+  transition: background 0.2s;
 }
 
 .banner-flor {

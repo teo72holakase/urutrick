@@ -1,7 +1,10 @@
 import { LobbyManager } from "../game/LobbyManager.js";
 import { TurnTimer, TIEMPOS } from "../game/Timer.js";
 import { guardarHistorial } from "../lib/appwrite.js";
-import { registrarMano, registrarPartida, leaderboard } from "../lib/stats.js";
+import { inicializarStats, registrarMano, registrarPartida, leaderboard, buscarJugador } from "../lib/stats.js";
+
+// Hidratar la caché de stats desde Appwrite al arrancar
+inicializarStats().catch((e) => console.error("Error al cargar stats:", e.message));
 
 const lobbyManager = new LobbyManager();
 const timers = new Map(); // lobbyId -> TurnTimer
@@ -262,6 +265,15 @@ export function registrarHandlers(io, socket) {
   socket.on("lobby:listar", (cb) => cb(lobbyManager.listarPublicos()));
 
   socket.on("stats:leaderboard", (cb) => cb?.(leaderboard()));
+
+  socket.on("stats:buscar-jugador", async ({ nombre }, cb) => {
+    try {
+      const resultado = await buscarJugador(nombre?.trim());
+      cb?.({ ok: true, resultado: resultado || null });
+    } catch (e) {
+      cb?.({ ok: false, error: e.message });
+    }
+  });
 
   // Info de una mesa puntual por su ID (para entrar directo por urutrick.vercel.app/{id})
   socket.on("lobby:info", (lobbyId, cb) => {

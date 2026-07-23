@@ -40,9 +40,9 @@ function Asiento({ j, estado, userId, esEspectador, esMiTurno, cantoPendiente, j
           {cantoPunto}
         </div>
       )}
-      <div className={`nombre-jugador${(!estado.bazaPendiente && estado.turno === j.id) ? " nombre-en-turno" : ""}`}>
+      <div className="nombre-jugador">
         {esModoEquipos && <span className={`letra-equipo letra-${j.equipo.toLowerCase()}`}>{j.equipo}</span>}
-        <span>{j.nombre}</span>
+        <span className={(!estado.bazaPendiente && estado.turno === j.id) ? "nombre-en-turno" : ""}>{j.nombre}</span>
         {lobby.jugadores[estado.manoIndex]?.id === j.id && <span className="icono-mano" title="Es mano">M</span>}
       </div>
       {esTurnoJugar && (
@@ -296,9 +296,10 @@ export default function GameTable({ lobby, userId, esEspectador = false, especta
   const nombreEquipo = (eq) => (eq === "A" ? nombreEquipoA : eq === "B" ? nombreEquipoB : eq);
   // En equipos: para el primer canto solo el jugador del turno; para revirar,
   // solo el trucoCantanteId asignado por el backend.
+  // En equipos: cantar truco requiere tener el turno; revirar requiere haber respondido "quiero" justo ahora
   const puedoCantarTruco = !esEspectador && !cantoPendiente && !enRevelacion && !estado.bazaPendiente && !estado.manoTerminada
     && estado.trucoNivel < 3 && estado.trucoPalabra === miEquipo
-    && (esUno || (estado.trucoNivel === 0 ? estado.turno === userId : estado.trucoCantanteId === userId));
+    && (esUno || estado.turno === userId || (estado.trucoCantanteId === userId && estado.trucoPuedeEscalarAhora));
   const puedoIrseAlMazo = !esEspectador && !cantoPendiente && !enRevelacion && !estado.bazaPendiente && !estado.manoTerminada;
   const revelDone = enRevelacion && revelCount >= ((estado.revelacionEnvido.orden || []).length);
 

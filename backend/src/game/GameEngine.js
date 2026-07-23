@@ -40,6 +40,7 @@ export class GameEngine {
     // En 2v2/3v3: control por jugador específico (no solo equipo)
     this.trucoCantanteId = jugadores[this.manoIndex].id; // jugador que puede cantar/revirar ahora
     this.trucoRespondeId = null; // jugador que debe responder (derecha del cantante)
+    this.trucoPuedeEscalarAhora = false; // true solo durante el escalarTruco inmediato
     this.envidoResuelto = false;
     this.florResuelta = false;
     this.revelacionEnvido = null; // sub-estado FASE_ENVIDO: canto de tantos en curso
@@ -228,17 +229,17 @@ export class GameEngine {
     const equipo = this.equipoDe(jugadorId);
     if (equipo !== this.trucoPalabra) throw new Error("No tenés la palabra para cantar truco");
 
-    // En 2v2/3v3: solo puede cantar/revirar el jugador específico con trucoCantanteId.
-    // Para el primer canto (nivel 0) también puede ser el jugador del turno actual.
+    // En 2v2/3v3: solo puede cantar/revirar quien tiene el turno actual
+    // O quien acaba de responder "quiero" y escala de inmediato (escalarTruco).
     if (this.lobby.modo !== "1v1") {
-      const esPrimerCanto = this.trucoNivel === 0;
       const esTurnoActual = this.jugadorActual().id === jugadorId;
-      const esCantanteAsignado = this.trucoCantanteId === jugadorId;
-      if (!esCantanteAsignado && !(esPrimerCanto && esTurnoActual)) {
-        throw new Error("Solo el jugador con el turno puede cantar o revirar el truco");
+      const puedeEscalarAhora = this.trucoCantanteId === jugadorId && this.trucoPuedeEscalarAhora;
+      if (!esTurnoActual && !puedeEscalarAhora) {
+        throw new Error("Esperá tu turno para cantar o revirar el truco");
       }
-      // Si fue el turno actual quien inició, actualizar trucoCantanteId
-      if (esPrimerCanto && esTurnoActual) this.trucoCantanteId = jugadorId;
+      // Consumir el permiso de escalada inmediata (uso único)
+      this.trucoPuedeEscalarAhora = false;
+      if (esTurnoActual) this.trucoCantanteId = jugadorId;
     }
 
     this.trucoNivel += 1;
@@ -279,8 +280,11 @@ export class GameEngine {
       return { quiero };
     }
     this.trucoPalabra = equipoQueResponde;
-    // En 2v2/3v3: el respondedor puede ahora revirar (escalarTruco hace quiero+cantar juntos)
-    if (this.lobby.modo !== "1v1") this.trucoCantanteId = jugadorId;
+    // En 2v2/3v3: habilitar escalada inmediata (escalarTruco = quiero+cantar en el mismo clic)
+    if (this.lobby.modo !== "1v1") {
+      this.trucoCantanteId = jugadorId;
+      this.trucoPuedeEscalarAhora = true; // permiso de uso único para revirar ahora mismo
+    }
     this.trucoRespondeId = null;
     this.estadoCanto = null;
     return { quiero };
@@ -645,6 +649,7 @@ export class GameEngine {
       trucoPalabra: this.trucoPalabra,
       trucoCantanteId: this.trucoCantanteId,
       trucoRespondeId: this.trucoRespondeId,
+      trucoPuedeEscalarAhora: this.trucoPuedeEscalarAhora,
       estadoCanto: this.estadoCanto,
       revelacionEnvido: this.revelacionEnvido,
       accionReciente: this.accionReciente,

@@ -18,6 +18,67 @@ function ColumnaRanking({ titulo, filas }) {
   );
 }
 
+function BuscarJugador() {
+  const [query, setQuery]         = useState("");
+  const [resultado, setResultado] = useState(null);
+  const [buscando, setBuscando]   = useState(false);
+  const [vacio, setVacio]         = useState(false);
+
+  function buscar() {
+    const nombre = query.trim();
+    if (!nombre) return;
+    setBuscando(true);
+    setResultado(null);
+    setVacio(false);
+    socket.emit("stats:buscar-jugador", { nombre }, (res) => {
+      setBuscando(false);
+      if (res?.ok && res.resultado) setResultado(res.resultado);
+      else setVacio(true);
+    });
+  }
+
+  return (
+    <div className="ranking-col buscar-jugador-col">
+      <div className="ranking-col-titulo">Buscar jugador</div>
+      <div className="buscar-fila">
+        <input
+          className="buscar-input"
+          placeholder="Nombre exacto…"
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setResultado(null); setVacio(false); }}
+          onKeyDown={(e) => e.key === "Enter" && buscar()}
+        />
+        <button className="btn btn-secundario buscar-btn" onClick={buscar} disabled={buscando || !query.trim()}>
+          {buscando ? "…" : "Buscar"}
+        </button>
+      </div>
+      {vacio && <div className="buscar-vacio">No encontrado</div>}
+      {resultado && (
+        <div className="buscar-resultado">
+          <div className="ranking-fila buscar-nombre-fila">
+            <span className="ranking-nombre">{resultado.nombre}</span>
+          </div>
+          <div className="ranking-fila">
+            <span className="ranking-pos">🖐</span>
+            <span className="ranking-nombre">Manos ganadas</span>
+            <span className="ranking-valor">{resultado.manos}</span>
+          </div>
+          <div className="ranking-fila">
+            <span className="ranking-pos">🏆</span>
+            <span className="ranking-nombre">Mesas ganadas</span>
+            <span className="ranking-valor">{resultado.mesas}</span>
+          </div>
+          <div className="ranking-fila">
+            <span className="ranking-pos">⭐</span>
+            <span className="ranking-nombre">Puntos hechos</span>
+            <span className="ranking-valor">{resultado.puntos}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Leaderboard({ ranking }) {
   return (
     <div className="leaderboard">
@@ -26,24 +87,22 @@ function Leaderboard({ ranking }) {
         <ColumnaRanking titulo="Manos ganadas" filas={ranking.manos} />
         <ColumnaRanking titulo="Mesas ganadas" filas={ranking.mesas} />
         <ColumnaRanking titulo="Puntos hechos" filas={ranking.puntos} />
+        <BuscarJugador />
       </div>
     </div>
   );
 }
 
 export default function LobbyBrowser({ nombreJugador, onEntrarLobby, onEspectar }) {
-  const [lobbies, setLobbies] = useState([]);
+  const [lobbies, setLobbies]           = useState([]);
   const [mostrarCrear, setMostrarCrear] = useState(false);
-  const [error, setError] = useState("");
-  const [refrescando, setRefrescando] = useState(false);
-  const [ranking, setRanking] = useState({ manos: [], mesas: [], puntos: [] });
+  const [error, setError]               = useState("");
+  const [refrescando, setRefrescando]   = useState(false);
+  const [ranking, setRanking]           = useState({ manos: [], mesas: [], puntos: [] });
 
   function refrescar() {
     setRefrescando(true);
-    socket.emit("lobby:listar", (lista) => {
-      setLobbies(lista);
-      setRefrescando(false);
-    });
+    socket.emit("lobby:listar", (lista) => { setLobbies(lista); setRefrescando(false); });
     socket.emit("stats:leaderboard", (r) => r && setRanking(r));
   }
 
